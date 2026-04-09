@@ -14,10 +14,10 @@ set -euo pipefail
 
 nvidia-smi
 
-cd /hhome/ricse01/TFM/TFM/Generation/Evaluate
+cd /hhome/ricse01/TFM/TFM/
 
 source /hhome/ricse01/miniconda3/bin/activate
 
 conda activate BCI
 
-python Reconstruction_Metrics.py
+python Generation\Diffusion_Unet\Inference_Test.py
