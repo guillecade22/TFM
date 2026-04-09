@@ -16,6 +16,8 @@ nvidia-smi
 
 cd /hhome/ricse01/TFM/TFM/
 
+export PYTHONPATH=/hhome/ricse01/TFM/TFM:$PYTHONPATH
+
 source /hhome/ricse01/miniconda3/bin/activate
 
 conda activate BCI
