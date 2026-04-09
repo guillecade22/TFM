@@ -16,7 +16,7 @@ nvidia-smi
 
 cd /hhome/ricse01/TFM/TFM/
 
-export PYTHONPATH=/hhome/ricse01/TFM/TFM:$PYTHONPATH
+export PYTHONPATH=/hhome/ricse01/TFM/TFM${PYTHONPATH:+:$PYTHONPATH}
 
 source /hhome/ricse01/miniconda3/bin/activate
 
