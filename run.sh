@@ -22,4 +22,4 @@ source /hhome/ricse01/miniconda3/bin/activate
 
 conda activate BCI
 
-python Retrieval/Retrieval.py
+python Retrieval/Retrieval_Test_Inference.py
