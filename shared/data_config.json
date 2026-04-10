@@ -1,0 +1,6 @@
+{
+    "data_path": "hhome/ricse01/TFM/required/Preprocessed_data_250Hz/Preprocessed_data_250Hz/",
+    "img_directory_training": "/hhome/ricse01/TFM/required/training_images",
+    "img_directory_test": "/hhome/ricse01/TFM/required/test_images/",
+    "features_path":"/home/ldy/Workspace/THINGS/CLIP"
+}
