@@ -181,27 +181,44 @@ def load_model(checkpoint_path, device):
     return model
 
 
+def make_caption(class_name):
+    """
+    Convert a raw class name into a natural prompt for SDXL.
+
+    - Replaces underscores with spaces: aircraft_carrier -> aircraft carrier
+    - Adds correct article (a / an)
+    - Wraps in a realistic photo prompt
+
+    Examples:
+      aircraft_carrier -> "a real photograph of an aircraft carrier"
+      wok              -> "a real photograph of a wok"
+      antelope         -> "a real photograph of an antelope"
+    """
+    # strip any "This picture is" prefix left over from dataset text field
+    prefix = "This picture is "
+    if class_name.startswith(prefix):
+        class_name = class_name[len(prefix):]
+
+    # underscores to spaces
+    label = class_name.replace("_", " ").strip()
+
+    # correct article
+    vowels = ("a", "e", "i", "o", "u")
+    article = "an" if label[0].lower() in vowels else "a"
+
+    return f"a photograph of {article} {label}"
+
+
 # -----------------------------------------------------------------------------
 # Inference
 # -----------------------------------------------------------------------------
 
 def run_inference(model, dataloader, img_features_all, text_features_all,
                   class_names, subject_id, device, top_k=5):
-    """
-    For each test EEG sample:
-      - Get EEG embedding from model
-      - Compare against all class image CLIP embeddings
-      - Record top-k predictions and whether top-1 is correct
-
-    Returns a list of dicts, one per sample.
-    """
     model.eval()
     img_features_all = F.normalize(img_features_all.to(device).float(), dim=-1)
     logit_scale = model.logit_scale
 
-    # class_names has one entry per class (200 classes)
-    # img_features_all has one entry per class image (one per class for test set)
-    # Take every 10th if features were stored with 10 images per class
     if img_features_all.shape[0] > len(class_names):
         step = img_features_all.shape[0] // len(class_names)
         img_features_all = img_features_all[::step]
@@ -221,24 +238,20 @@ def run_inference(model, dataloader, img_features_all, text_features_all,
             subject_ids = torch.full((batch_size,), subject_id,
                                      dtype=torch.long).to(device)
 
-            # Forward pass -> EEG embedding [batch x 1024]
             eeg_emb = model(eeg_data, subject_ids).float()
             eeg_emb = F.normalize(eeg_emb, dim=-1)
 
-            # Cosine similarity against all class embeddings [batch x n_classes]
             similarities = logit_scale * eeg_emb @ img_features_all.T
-
-            # Top-k predictions
             topk_vals, topk_idxs = torch.topk(similarities, top_k, dim=-1)
 
             for i in range(batch_size):
-                true_label   = labels[i].item()
-                top1_idx     = topk_idxs[i, 0].item()
-                top1_score   = topk_vals[i, 0].item()
+                true_label    = labels[i].item()
+                top1_idx      = topk_idxs[i, 0].item()
+                top1_score    = topk_vals[i, 0].item()
                 topk_idx_list = topk_idxs[i].tolist()
 
-                true_class  = class_names[true_label]
-                top1_class  = class_names[top1_idx]
+                true_class   = class_names[true_label]
+                top1_class   = class_names[top1_idx]
                 topk_classes = [class_names[j] for j in topk_idx_list]
 
                 is_top1_correct = (top1_idx == true_label)
@@ -249,32 +262,98 @@ def run_inference(model, dataloader, img_features_all, text_features_all,
                 total        += 1
 
                 results.append({
-                    "sample_idx":    total - 1,
-                    "true_label":    true_label,
-                    "true_class":    true_class,
-                    "top1_class":    top1_class,
-                    "top1_score":    round(top1_score, 4),
-                    "top1_correct":  is_top1_correct,
-                    "top5_correct":  is_top5_correct,
-                    "top5_classes":  " | ".join(topk_classes),
-                    "top5_scores":   " | ".join(
+                    "sample_idx":   total - 1,
+                    "true_label":   true_label,
+                    "true_class":   true_class,
+                    "top1_class":   top1_class,
+                    "top1_caption": make_caption(top1_class),
+                    "top1_score":   round(top1_score, 4),
+                    "top1_correct": is_top1_correct,
+                    "top5_correct": is_top5_correct,
+                    "top5_classes": " | ".join(topk_classes),
+                    "top5_scores":  " | ".join(
                         [str(round(topk_vals[i, j].item(), 4)) for j in range(top_k)]
                     ),
                 })
 
             if (batch_idx + 1) % 50 == 0:
-                print(f"  Processed {total} samples... "
-                      f"Top-1 so far: {correct_top1/total:.3f}  "
-                      f"Top-5 so far: {correct_top5/total:.3f}")
+                print(f"  Processed {total} samples ... "
+                      f"Top-1: {correct_top1/total:.3f}  "
+                      f"Top-5: {correct_top5/total:.3f}")
 
     top1_acc = correct_top1 / total
     top5_acc = correct_top5 / total
-
     print(f"\nFinal accuracy over {total} samples:")
     print(f"  Top-1: {top1_acc:.4f} ({correct_top1}/{total})")
     print(f"  Top-5: {top5_acc:.4f} ({correct_top5}/{total})")
 
     return results, top1_acc, top5_acc
+
+
+# -----------------------------------------------------------------------------
+# Caption file writers
+# -----------------------------------------------------------------------------
+
+def save_caption_files(results, caption_dir, top_k):
+    """
+    Writes three files:
+
+    captions_top1.txt
+        200 lines. Line N is the caption for test image N.
+        Use directly as CAPTIONS_TXT_PATH in the generation script.
+
+    captions_top5.txt
+        200 * top_k lines. Lines [N*top_k .. N*top_k + top_k - 1] are the
+        top-k captions for test image N.
+        In your generation loop use:
+            caption = captions[i * top_k + k]   for k in range(top_k)
+
+    captions_top5_readable.txt
+        Same content as top5 but with human-readable comment headers between
+        each group, for easy inspection.
+    """
+    os.makedirs(caption_dir, exist_ok=True)
+
+    top1_path     = os.path.join(caption_dir, "captions_top1.txt")
+    top5_path     = os.path.join(caption_dir, "captions_top5.txt")
+    readable_path = os.path.join(caption_dir, "captions_top5_readable.txt")
+
+    with open(top1_path,     "w") as f1, \
+         open(top5_path,     "w") as f5, \
+         open(readable_path, "w") as fr:
+
+        for r in results:
+            # -- top-1 file: one caption per line -----------------------------
+            f1.write(make_caption(r["top1_class"]) + "\n")
+
+            # -- top-5 file: top_k captions per image, consecutive lines ------
+            top5_cls_list   = [c.strip() for c in r["top5_classes"].split("|")]
+            top5_score_list = [s.strip() for s in r["top5_scores"].split("|")]
+
+            fr.write(
+                f"# [{r['sample_idx']:03d}]  true={r['true_class']}  "
+                f"top1_correct={r['top1_correct']}  "
+                f"top5_correct={r['top5_correct']}\n"
+            )
+            for cls, score in zip(top5_cls_list, top5_score_list):
+                caption = make_caption(cls)
+                f5.write(caption + "\n")
+                fr.write(f"    {caption}  [score={score}]\n")
+
+    print(f"\nCaption files saved to: {caption_dir}")
+    print(f"  captions_top1.txt          -> {len(results)} lines  (1 per image)")
+    print(f"  captions_top5.txt          -> {len(results) * top_k} lines  ({top_k} per image, consecutive)")
+    print(f"  captions_top5_readable.txt -> same with headers")
+    print(f"\nExample captions generated:")
+    for r in results[:5]:
+        print(f"  [{r['sample_idx']:03d}] top1: {make_caption(r['top1_class'])}")
+    print(f"\nTo use top-1 in generation script:")
+    print(f"  CAPTIONS_TXT_PATH = \"{top1_path}\"")
+    print(f"\nTo use top-5, change your generation loop to:")
+    print(f"  captions = open(\"{top5_path}\").read().splitlines()")
+    print(f"  for i in range(len(eeg_embeds)):")
+    print(f"      for k in range({top_k}):")
+    print(f"          caption = captions[i * {top_k} + k]")
 
 
 # -----------------------------------------------------------------------------
@@ -293,6 +372,9 @@ def main():
                         help="Subject ID to evaluate.")
     parser.add_argument("--output", type=str, default="retrieval_results.csv",
                         help="Output CSV file path.")
+    parser.add_argument("--caption_dir", type=str,
+                        default="/hhome/ricse01/TFM/TFM/captions/",
+                        help="Folder where caption txt files will be saved.")
     parser.add_argument("--top_k", type=int, default=5,
                         help="Number of top predictions to record.")
     parser.add_argument("--device", type=str, default="auto",
@@ -338,9 +420,6 @@ def main():
                 break
 
     if class_names is None:
-        # Fallback: walk dataloader once and read the text field per sample.
-        # Your dataloader yields: (eeg_data, labels, text, text_features, img, img_features)
-        # text is the class name string.
         print("\nNo named attribute found - extracting class names from dataloader text field...")
         class_names_dict = {}
         tmp_loader = DataLoader(test_dataset, batch_size=1, shuffle=False,
@@ -353,15 +432,14 @@ def main():
         class_names = [class_names_dict[i] for i in sorted(class_names_dict.keys())]
         print(f"Extracted {len(class_names)} class names from text field.")
 
-    print(f"First 5 class names: {class_names[:5]}")
-    print(f"Last  5 class names: {class_names[-5:]}")
+    print(f"First 5 class names : {class_names[:5]}")
+    print(f"Last  5 class names : {class_names[-5:]}")
+    print(f"Example captions    : {[make_caption(c) for c in class_names[:3]]}")
 
-    # -- image CLIP features (one per class for the test set) -----------------
-    img_features_all = test_dataset.img_features   # [n_classes x 1024] or [n_classes*10 x 1024]
-    print(f"img_features_all shape: {img_features_all.shape}")
-
-    # -- text features (used only as reference, not for retrieval here) -------
+    # -- image CLIP features --------------------------------------------------
+    img_features_all  = test_dataset.img_features
     text_features_all = test_dataset.text_features
+    print(f"img_features_all shape: {img_features_all.shape}")
 
     # -- load model -----------------------------------------------------------
     model = load_model(args.checkpoint, device)
@@ -384,35 +462,25 @@ def main():
         writer = csv.DictWriter(f, fieldnames=results[0].keys())
         writer.writeheader()
         writer.writerows(results)
+    print(f"CSV saved to: {args.output}")
 
-    print(f"\nResults saved to: {args.output}")
+    # -- save caption txt files -----------------------------------------------
+    save_caption_files(results, args.caption_dir, args.top_k)
+
+    # -- print summary --------------------------------------------------------
     print(f"\nSummary:")
-    print(f"  Subject:  {args.subject}")
-    print(f"  Samples:  {len(results)}")
-    print(f"  Top-1 accuracy: {top1_acc:.4f}")
-    print(f"  Top-5 accuracy: {top5_acc:.4f}")
+    print(f"  Subject        : {args.subject}")
+    print(f"  Total samples  : {len(results)}")
+    print(f"  Top-1 accuracy : {top1_acc:.4f}")
+    print(f"  Top-5 accuracy : {top5_acc:.4f}")
 
-    # -- show a few examples --------------------------------------------------
     print("\nSample predictions (first 10):")
-    print(f"  {'True class':<25} {'Top-1 predicted':<25} {'Score':>7}  {'Correct'}")
-    print("  " + "-" * 70)
+    print(f"  {'True class':<22} {'Predicted':<22} {'Caption':<45} {'Score':>6}  OK?")
+    print("  " + "-" * 100)
     for r in results[:10]:
         marker = "OK" if r["top1_correct"] else "X"
-        print(f"  {r['true_class']:<25} {r['top1_class']:<25} {r['top1_score']:>7.4f}  {marker}")
-
-    # -- show per-class accuracy ----------------------------------------------
-    from collections import defaultdict
-    class_correct = defaultdict(int)
-    class_total   = defaultdict(int)
-    for r in results:
-        class_total[r["true_class"]]   += 1
-        class_correct[r["true_class"]] += int(r["top1_correct"])
-
-    print("\nPer-class Top-1 accuracy (classes with >1 sample):")
-    multi = {c: class_correct[c]/class_total[c]
-             for c in class_total if class_total[c] > 1}
-    for cls, acc in sorted(multi.items(), key=lambda x: -x[1]):
-        print(f"  {cls:<30} {acc:.2f} ({class_correct[cls]}/{class_total[cls]})")
+        print(f"  {r['true_class']:<22} {r['top1_class']:<22} "
+              f"{r['top1_caption']:<45} {r['top1_score']:>6.4f}  {marker}")
 
 
 if __name__ == "__main__":
