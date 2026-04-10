@@ -19,7 +19,6 @@ from shared.subject_layers.Embed import DataEmbedding
 import warnings
 warnings.filterwarnings("ignore")
 
-
 # -----------------------------------------------------------------------------
 # Model definition (copied exactly from training script)
 # -----------------------------------------------------------------------------
