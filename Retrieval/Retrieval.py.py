@@ -31,9 +31,9 @@ from torch import Tensor
 import itertools
 import math
 import re
-from subject_layers.Transformer_EncDec import Encoder, EncoderLayer
-from subject_layers.SelfAttention_Family import FullAttention, AttentionLayer
-from subject_layers.Embed import DataEmbedding
+from shared.subject_layers.Transformer_EncDec import Encoder, EncoderLayer
+from shared.subject_layers.SelfAttention_Family import FullAttention, AttentionLayer
+from shared.subject_layers.Embed import DataEmbedding
 import numpy as np
 from loss import ClipLoss
 import argparse
