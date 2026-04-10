@@ -25,7 +25,7 @@ vlmodel, preprocess_train, feature_extractor = open_clip.create_model_and_transf
 import json
 
 # Load the configuration from the JSON file
-config_path = "data_config.json"
+config_path = "/hhome/ricse01/TFM/TFM/shared/data_config.json"
 with open(config_path, "r") as config_file:
     config = json.load(config_file)
 
