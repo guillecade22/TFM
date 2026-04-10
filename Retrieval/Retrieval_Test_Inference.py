@@ -1,3 +1,25 @@
+"""
+Retrieval Inference Script for ATMS EEG Model
+----------------------------------------------
+Loads a trained ATMS checkpoint and runs inference on the test set.
+For each test EEG sample, computes cosine similarity against all class
+image CLIP embeddings and reports:
+  - Top-1 predicted class name
+  - Top-5 predicted class names
+  - Whether the prediction is correct
+  - Confidence score (cosine similarity of top-1)
+
+The output is a CSV file with one row per test sample, plus a summary
+of Top-1 and Top-5 accuracy.
+
+Usage:
+  python retrieval_inference.py \
+      --checkpoint /path/to/model.pth \
+      --data_path  /hhome/ricse01/TFM/required/Preprocessed_data_250Hz/Preprocessed_data_250Hz/ \
+      --subject    sub-08 \
+      --output     retrieval_results.csv
+"""
+
 import os
 import re
 import csv
@@ -285,7 +307,7 @@ def run_inference(model, dataloader, img_features_all, text_features_all,
 def main():
     parser = argparse.ArgumentParser(description="ATMS retrieval inference on test set.")
     parser.add_argument("--checkpoint", type=str,
-                        default="/hhome/ricse01/TFM/out/Retrieval_subject8/models/contrast/ATMS/sub-08/04-10_16-51/40.pth",
+                        default="./models/contrast/ATMS/sub-08/best.pth",
                         help="Path to trained .pth checkpoint.")
     parser.add_argument("--data_path", type=str,
                         default="/hhome/ricse01/TFM/required/Preprocessed_data_250Hz/Preprocessed_data_250Hz/",
@@ -298,6 +320,9 @@ def main():
                         help="Number of top predictions to record.")
     parser.add_argument("--device", type=str, default="auto",
                         help="auto, cuda, or cpu.")
+    parser.add_argument("--caption_dir", type=str,
+                        default="/hhome/ricse01/TFM/EEG_Image_decode/Generation/captions/",
+                        help="Folder where caption txt files will be saved.")
     args = parser.parse_args()
 
     # -- device ---------------------------------------------------------------
@@ -387,6 +412,55 @@ def main():
         writer.writerows(results)
 
     print(f"\nResults saved to: {args.output}")
+
+    # -- save caption files ---------------------------------------------------
+    # Caption format: one line per test sample (line N = caption for image N).
+    # This matches exactly what the SDXL generation script expects when it does:
+    #   captions = [line.strip() for line in f.readlines()]
+    #
+    # captions_top1.txt  : 200 lines, one predicted class per line
+    #   e.g. "a photo of an aircraft carrier"
+    #
+    # captions_top5.txt  : 200 * 5 = 1000 lines, 5 consecutive lines per image
+    #   images 0-4 = top-5 candidates for test image 0
+    #   images 5-9 = top-5 candidates for test image 1  etc.
+    #   This lets you run the generation loop with i*5 .. i*5+5 per test image.
+    #
+    # captions_top5_per_image.txt : same as top5 but with a header comment
+    #   before each group so it is human-readable for debugging.
+
+    os.makedirs(args.caption_dir, exist_ok=True)
+
+    top1_path  = os.path.join(args.caption_dir, "captions_top1.txt")
+    top5_path  = os.path.join(args.caption_dir, "captions_top5.txt")
+    top5h_path = os.path.join(args.caption_dir, "captions_top5_readable.txt")
+
+    with open(top1_path, "w") as f1,          open(top5_path, "w") as f5,          open(top5h_path, "w") as f5h:
+
+        for r in results:
+            # top-1: one caption per image, plain class name as prompt
+            top1_caption = f"a photo of {r['top1_class']}"
+            f1.write(top1_caption + "\n")
+
+            # top-5: 5 captions per image (one per candidate class)
+            top5_cls_list = [c.strip() for c in r["top5_classes"].split("|")]
+            top5_scores   = [s.strip() for s in r["top5_scores"].split("|")]
+
+            f5h.write(f"# sample {r['sample_idx']}  true={r['true_class']}  "
+                      f"top1_correct={r['top1_correct']}\n")
+            for cls, score in zip(top5_cls_list, top5_scores):
+                caption = f"a photo of {cls}"
+                f5.write(caption + "\n")
+                f5h.write(f"  {caption}  (score={score})\n")
+
+    print(f"\nCaption files saved to: {args.caption_dir}")
+    print(f"  captions_top1.txt          : {len(results)} lines (1 per test image)")
+    print(f"  captions_top5.txt          : {len(results)*5} lines (5 per test image, consecutive)")
+    print(f"  captions_top5_readable.txt : same with headers for debugging")
+    print(f"\nTo use top-1 in your generation script:")
+    print(f"  CAPTIONS_TXT_PATH = '{top1_path}'")
+    print(f"\nTo use top-5, loop with:  caption = captions[i*5 + k]  for k in range(5)")
+
     print(f"\nSummary:")
     print(f"  Subject:  {args.subject}")
     print(f"  Samples:  {len(results)}")
