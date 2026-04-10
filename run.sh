@@ -16,6 +16,9 @@ nvidia-smi
 
 cd /hhome/ricse01/TFM/TFM/
 
+rm -rf slurm_io
+mkdir -p slurm_io
+
 export PYTHONPATH=/hhome/ricse01/TFM/TFM${PYTHONPATH:+:$PYTHONPATH}
 
 source /hhome/ricse01/miniconda3/bin/activate
