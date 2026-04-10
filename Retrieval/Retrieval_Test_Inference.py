@@ -1,25 +1,3 @@
-"""
-Retrieval Inference Script for ATMS EEG Model
-----------------------------------------------
-Loads a trained ATMS checkpoint and runs inference on the test set.
-For each test EEG sample, computes cosine similarity against all class
-image CLIP embeddings and reports:
-  - Top-1 predicted class name
-  - Top-5 predicted class names
-  - Whether the prediction is correct
-  - Confidence score (cosine similarity of top-1)
-
-The output is a CSV file with one row per test sample, plus a summary
-of Top-1 and Top-5 accuracy.
-
-Usage:
-  python retrieval_inference.py \
-      --checkpoint /path/to/model.pth \
-      --data_path  /hhome/ricse01/TFM/required/Preprocessed_data_250Hz/Preprocessed_data_250Hz/ \
-      --subject    sub-08 \
-      --output     retrieval_results.csv
-"""
-
 import os
 import re
 import csv
@@ -307,7 +285,7 @@ def run_inference(model, dataloader, img_features_all, text_features_all,
 def main():
     parser = argparse.ArgumentParser(description="ATMS retrieval inference on test set.")
     parser.add_argument("--checkpoint", type=str,
-                        default="./models/contrast/ATMS/sub-08/best.pth",
+                        default="/hhome/ricse01/TFM/out/Retrieval_subject8/models/contrast/ATMS/sub-08/04-10_16-51/40.pth",
                         help="Path to trained .pth checkpoint.")
     parser.add_argument("--data_path", type=str,
                         default="/hhome/ricse01/TFM/required/Preprocessed_data_250Hz/Preprocessed_data_250Hz/",
