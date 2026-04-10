@@ -15,8 +15,8 @@ import torch
 from PIL import Image
 
 sys.path.append("../")
-from diffusion_prior import DiffusionPriorUNet, Pipe
-from custom_pipeline_low_level import Generator4Embeds
+from shared.diffusion_prior import DiffusionPriorUNet, Pipe
+from shared.custom_pipeline_low_level import Generator4Embeds
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
