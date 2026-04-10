@@ -1,3 +1,25 @@
+"""
+Retrieval Inference Script for ATMS EEG Model
+----------------------------------------------
+Loads a trained ATMS checkpoint and runs inference on the test set.
+For each test EEG sample, computes cosine similarity against all class
+image CLIP embeddings and reports:
+  - Top-1 predicted class name
+  - Top-5 predicted class names
+  - Whether the prediction is correct
+  - Confidence score (cosine similarity of top-1)
+
+The output is a CSV file with one row per test sample, plus a summary
+of Top-1 and Top-5 accuracy.
+
+Usage:
+  python retrieval_inference.py \
+      --checkpoint /path/to/model.pth \
+      --data_path  /hhome/ricse01/TFM/required/Preprocessed_data_250Hz/Preprocessed_data_250Hz/ \
+      --subject    sub-08 \
+      --output     retrieval_results.csv
+"""
+
 import os
 import re
 import csv
@@ -285,7 +307,7 @@ def run_inference(model, dataloader, img_features_all, text_features_all,
 def main():
     parser = argparse.ArgumentParser(description="ATMS retrieval inference on test set.")
     parser.add_argument("--checkpoint", type=str,
-                        default="/hhome/ricse01/TFM/out/Retrieval_subject8/models/contrast/ATMS/sub-08/04-10_16-51/40.pth",
+                        default="./models/contrast/ATMS/sub-08/best.pth",
                         help="Path to trained .pth checkpoint.")
     parser.add_argument("--data_path", type=str,
                         default="/hhome/ricse01/TFM/required/Preprocessed_data_250Hz/Preprocessed_data_250Hz/",
@@ -314,30 +336,44 @@ def main():
                               num_workers=0, drop_last=False)
     print(f"Test samples: {len(test_dataset)}")
 
-    # -- class names from dataset ---------------------------------------------
-    # The dataset stores text features in order of class index (0..199)
-    # We recover class names from the dataset's internal label list
-    # EEGDataset stores them as dataset.labels_text or similar
-    # Try common attribute names:
+    # -- inspect dataset attributes to find class names ----------------------
+    print("\nDataset attributes:")
+    for attr in sorted(vars(test_dataset).keys()):
+        val = getattr(test_dataset, attr)
+        if isinstance(val, (list, tuple)) and len(val) > 0 and isinstance(val[0], str):
+            print(f"  {attr}: list of strings, len={len(val)}, e.g. {val[:3]}")
+        elif isinstance(val, torch.Tensor):
+            print(f"  {attr}: Tensor {tuple(val.shape)}")
+        elif isinstance(val, (list, tuple)):
+            print(f"  {attr}: {type(val).__name__} len={len(val)}")
+        else:
+            print(f"  {attr}: {type(val).__name__} = {str(val)[:60]}")
+
+    # -- class names: try known attribute names, guard against None -----------
     class_names = None
-    for attr in ["labels_text", "class_names", "classes", "label_names", "text_labels"]:
+    for attr in ["labels_text", "class_names", "classes", "label_names",
+                 "text_labels", "idx_to_class", "label_list"]:
         if hasattr(test_dataset, attr):
-            class_names = list(getattr(test_dataset, attr))
-            print(f"Found class names via dataset.{attr}  ({len(class_names)} classes)")
-            break
+            val = getattr(test_dataset, attr)
+            if val is not None:
+                class_names = list(val)
+                print(f"\nFound class names via dataset.{attr} ({len(class_names)} classes)")
+                break
 
     if class_names is None:
-        # Fallback: extract from one batch (text field is the class name string)
-        print("Extracting class names from dataset text field...")
-        class_names_set = {}
+        # Fallback: walk dataloader once and read the text field per sample.
+        # Your dataloader yields: (eeg_data, labels, text, text_features, img, img_features)
+        # text is the class name string.
+        print("\nNo named attribute found - extracting class names from dataloader text field...")
+        class_names_dict = {}
         tmp_loader = DataLoader(test_dataset, batch_size=1, shuffle=False,
                                 num_workers=0, drop_last=False)
-        for _, (eeg_data, labels, text, text_features, img, img_features) in enumerate(tmp_loader):
+        for eeg_data, labels, text, text_features, img, img_features in tmp_loader:
             label = labels[0].item()
-            name  = text[0] if isinstance(text[0], str) else text[0][0]
-            if label not in class_names_set:
-                class_names_set[label] = name
-        class_names = [class_names_set[i] for i in sorted(class_names_set.keys())]
+            if label not in class_names_dict:
+                name = text[0] if isinstance(text[0], str) else str(text[0])
+                class_names_dict[label] = name
+        class_names = [class_names_dict[i] for i in sorted(class_names_dict.keys())]
         print(f"Extracted {len(class_names)} class names from text field.")
 
     print(f"First 5 class names: {class_names[:5]}")
