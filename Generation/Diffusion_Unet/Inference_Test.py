@@ -31,8 +31,8 @@ eeg_test = eeg_test.to(device).float()
 print(f"VIT test shape: {vit_test.shape}, EEG test shape: {eeg_test.shape}")
 
 # ----------------- Load diffusion prior -----------------
-from Generation.shared.diffusion_prior import *
-from Generation.shared.custom_pipeline import *
+from shared.diffusion_prior import *
+from shared.custom_pipeline import *
 
 print("Loading diffusion prior model...")
 diffusion_prior = DiffusionPriorUNet(cond_dim=1024, dropout=0.1).to(device)
