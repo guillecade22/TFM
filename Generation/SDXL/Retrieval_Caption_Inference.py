@@ -2,8 +2,8 @@
 VIT_H_14_FEATURES_TEST    = "/hhome/ricse01/TFM/required/ViT-H-14_features_test.pt"
 ATM_S_EEG_FEATURES_SUB_08 = "/hhome/ricse01/TFM/required/ATM_S_eeg_features_sub-08_test.pt"
 DIFFUSION_PRIOR_PATH       = "/hhome/ricse01/TFM/required/sub-08/diffusion_prior.pt"
-CAPTIONS_TOP1_PATH         = "/hhome/ricse01/TFM/EEG_Image_decode/Generation/captions/captions_top1.txt"
-CAPTIONS_TOP5_PATH         = "/hhome/ricse01/TFM/EEG_Image_decode/Generation/captions/captions_top5.txt"
+CAPTIONS_TOP1_PATH         = "/hhome/ricse01/TFM/required/captions_retrieval/captions_top1.txt"
+CAPTIONS_TOP5_PATH         = "/hhome/ricse01/TFM/required/captions_retrieval/captions_top5.txt"
 OUTPUT_DIR_TOP1            = "/hhome/ricse01/TFM/EEG_Image_decode/Generation/generated_retrieval_top1"
 OUTPUT_DIR_TOP5            = "/hhome/ricse01/TFM/EEG_Image_decode/Generation/generated_retrieval_top5"
 
