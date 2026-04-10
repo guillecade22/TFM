@@ -17,7 +17,7 @@ import numpy as np
 import torch.nn as nn
 import torchvision.transforms as transforms
 import tqdm
-from eegdatasets_leaveone import EEGDataset
+from shared.eegdatasets_leaveone import EEGDataset
 
 from einops.layers.torch import Rearrange, Reduce
 
@@ -35,7 +35,7 @@ from shared.subject_layers.Transformer_EncDec import Encoder, EncoderLayer
 from shared.subject_layers.SelfAttention_Family import FullAttention, AttentionLayer
 from shared.subject_layers.Embed import DataEmbedding
 import numpy as np
-from loss import ClipLoss
+from shared.loss import ClipLoss
 import argparse
 from torch import nn
 from torch.optim import AdamW
