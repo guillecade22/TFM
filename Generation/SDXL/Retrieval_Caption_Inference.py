@@ -5,7 +5,7 @@ DIFFUSION_PRIOR_PATH       = "/hhome/ricse01/TFM/required/sub-08/diffusion_prior
 CAPTIONS_TOP1_PATH         = "/hhome/ricse01/TFM/required/captions_retrieval/captions_top1.txt"
 CAPTIONS_TOP5_PATH         = "/hhome/ricse01/TFM/required/captions_retrieval/captions_top5.txt"
 OUTPUT_DIR_TOP1            = "/hhome/ricse01/TFM/TFM/generated_retrieval_top1"
-OUTPUT_DIR_TOP5            = "/hhome/ricse01/TFM/TFM/generated_retrieval_top1"
+OUTPUT_DIR_TOP5            = "/hhome/ricse01/TFM/TFM/generated_retrieval_top5"
 
 # --- IMPORTS ------------------------------------------------------------------
 import os
