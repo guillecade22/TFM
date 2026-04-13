@@ -22,4 +22,4 @@ source /hhome/ricse01/miniconda3/bin/activate
 
 conda activate BCI
 
-python Generation/SDXL/Retrieval_Caption_Inference.py
+python Generation/SDXL/Retrieval_true_label.py
