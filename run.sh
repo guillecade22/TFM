@@ -22,4 +22,4 @@ source /hhome/ricse01/miniconda3/bin/activate
 
 conda activate BCI
 
-python Generation/Evaluate/Get_Evaluate_Structure.py
+python Generation/Evaluate/Reconstruction_Metrics.py --gen_dir="/hhome/ricse01/TFM/TFM/structured_output"
