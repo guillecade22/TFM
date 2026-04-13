@@ -9,15 +9,15 @@ OUTPUT_DIR                 = "/hhome/ricse01/TFM/TFM/generated_gt_caption"
 # 1.0 = fully image-driven (text prompt ignored, current default)
 # 0.5 = balanced between image embedding and text prompt
 # 0.3 = text prompt has more influence
-IP_ADAPTER_SCALE = 0.5
+IP_ADAPTER_SCALE = 0.7
 
 # SDXL guidance scale: how strongly the text prompt is followed.
 # 0.0 = SDXL-turbo mode (text ignored, fastest)
 # 5.0 to 7.5 = standard SDXL (text followed, slower, needs more steps)
-GUIDANCE_SCALE = 5.0
+GUIDANCE_SCALE = 3.0
 
 # Inference steps: 4 for turbo (guidance_scale=0.0), 20-30 for standard
-NUM_INFERENCE_STEPS = 20
+NUM_INFERENCE_STEPS = 15
 
 # Negative prompt: steers SDXL away from unwanted styles
 NEGATIVE_PROMPT = "cartoon, illustration, painting, drawing, render, cgi, blurry, low quality, artificial"
