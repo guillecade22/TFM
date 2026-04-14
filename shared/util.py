@@ -6,7 +6,7 @@ import sys
 import time
 from torch import inf
 import wandb
-
+os.environ["WANDB_MODE"] = "offline"
 class NativeScaler:
     state_dict_key = "amp_scaler"
 
