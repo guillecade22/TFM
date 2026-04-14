@@ -32,11 +32,11 @@ from torch import Tensor
 import itertools
 import math
 import re
-from models.subject_layers.Transformer_EncDec import Encoder, EncoderLayer
-from models.subject_layers.SelfAttention_Family import FullAttention, AttentionLayer
-from models.subject_layers.Embed import DataEmbedding
+from shared.subject_layers.Transformer_EncDec import Encoder, EncoderLayer
+from shared.subject_layers.SelfAttention_Family import FullAttention, AttentionLayer
+from shared.subject_layers.Embed import DataEmbedding
 import numpy as np
-from models.loss import ClipLoss
+from shared.loss import ClipLoss
 import argparse
 from torch import nn
 from torch.optim import AdamW
