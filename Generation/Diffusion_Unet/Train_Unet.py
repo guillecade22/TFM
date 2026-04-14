@@ -41,6 +41,8 @@ import argparse
 from torch import nn
 from torch.optim import AdamW
 
+os.environ["WANDB_MODE"] = "offline"
+
 class Config:
     def __init__(self):
         self.task_name = 'classification'  # Example task name
