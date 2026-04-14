@@ -19,6 +19,7 @@ from shared.subject_layers.Transformer_EncDec import Encoder, EncoderLayer
 from shared.subject_layers.SelfAttention_Family import FullAttention, AttentionLayer
 from shared.subject_layers.Embed import DataEmbedding
 
+from einops.layers.torch import Rearrange
 
 
 # ─────────────────────────────────────────────────────────────────────────────
