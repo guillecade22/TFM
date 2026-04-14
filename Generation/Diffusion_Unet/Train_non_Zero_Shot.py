@@ -21,7 +21,7 @@ from shared.subject_layers.Embed import DataEmbedding
 
 from einops.layers.torch import Rearrange
 
-
+os.environ["WANDB_MODE"] = "offline"
 # ─────────────────────────────────────────────────────────────────────────────
 #  Model definitions  (identical to original Train_Unet.py)
 # ─────────────────────────────────────────────────────────────────────────────
