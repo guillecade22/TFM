@@ -11,7 +11,7 @@ TEST_DIR = "/hhome/ricse01/TFM/required/test_images"
 VIT_H_14_FEATURES_TEST_PATH = "/hhome/ricse01/TFM/TFM/ViT-H-14_features_test.pt"
 MODEL_ATMS_EEG_FEATURES_TEST_PATH = "/hhome/ricse01/TFM/required/ATM_S_eeg_features_sub-08_test.pt"
 # DIFFUSION_MODEL_PATH = "/hhome/ricse01/TFM/required/sub-08/diffusion_prior.pt"
-DIFFUSION_MODEL_PATH = "hhome/ricse01/TFM/TFM/models/contrast/ATMS/sub-08/04-14_17-19/40.pth"
+DIFFUSION_MODEL_PATH = "/hhome/ricse01/TFM/TFM/models/contrast/ATMS/sub-08/04-14_17-19/40.pth"
 SUBJECT = "sub-08"
 
 # ----------------- Device -----------------
