@@ -25,7 +25,7 @@ from torch.utils.data import DataLoader, Dataset
 import random
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from models.util import wandb_logger
+from shared.util import wandb_logger
 from braindecode.models import EEGNetv4, ATCNet, EEGConformer, EEGITNet, ShallowFBCSPNet
 import csv
 from torch import Tensor
