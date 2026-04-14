@@ -16,7 +16,7 @@ import numpy as np
 import torch.nn as nn
 import torchvision.transforms as transforms
 import tqdm
-from eegdatasets_leaveone import EEGDataset
+from shared.eegdatasets_leaveone import EEGDataset
 
 from einops.layers.torch import Rearrange, Reduce
 
