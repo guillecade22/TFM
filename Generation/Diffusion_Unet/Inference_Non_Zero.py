@@ -13,8 +13,8 @@ from PIL import Image
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # ── Project imports ────────────────────────────────────────────────────────────
-from shared.diffusion_prior import DiffusionPriorUNet
-from shared.custom_pipeline import Pipe, Generator4Embeds
+from shared.diffusion_prior import DiffusionPriorUNet, Pipe
+from shared.custom_pipeline import Generator4Embeds
 
 # ── These mirror Train_Unet_NonZeroShot.py exactly ────────────────────────────
 from einops.layers.torch import Rearrange
