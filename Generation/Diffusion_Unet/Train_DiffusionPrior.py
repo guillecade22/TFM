@@ -468,7 +468,7 @@ pipe.train(dl, num_epochs=150, learning_rate=1e-3) # to 0.142
 # --- cell ---
 
 # pipe.diffusion_prior.load_state_dict(torch.load(f'./fintune_ckpts/{config['data_path']}/{sub}/{model_name}.pt', map_location=device))
-save_path = "/home/gcadevall/CVC/TFM/eeg/MAIN/Generation/fintune_ckpts/ATMS/sub-08/diffusion_prior.pt"
+save_path = "/hhome/ricse01/TFM/TFM/fintune_ckpts/ATMS/sub-08/diffusion_prior.pt"
 
 directory = os.path.dirname(save_path)
 
