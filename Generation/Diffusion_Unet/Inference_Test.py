@@ -6,7 +6,7 @@ import torch
 from torch.utils.data import DataLoader
 from PIL import Image
 
-# "/export/hhome/ricse01/TFM/TFM/results_new_train/ViT-H-14_features_train.pt"
+
 # ----------------- Paths -----------------
 TEST_DIR = "/hhome/ricse01/TFM/required/test_images"
 VIT_H_14_FEATURES_TEST_PATH = "/hhome/ricse01/TFM/TFM/results_new_train/ViT-H-14_features_test.pt"
