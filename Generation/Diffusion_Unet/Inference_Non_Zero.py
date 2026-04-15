@@ -368,10 +368,9 @@ def main():
     parser.add_argument('--data_path', type=str,
                         default="/hhome/ricse01/TFM/required/Preprocessed_data_250Hz/Preprocessed_data_250Hz/",
                         help="Root path to preprocessed EEG data")
-    parser.add_argument('--atms_ckpt', type=str, required=True,
+    parser.add_argument('--atms_ckpt', type=str, default="/hhome/ricse01/TFM/TFM/models/nonzeroshot/ATMS/sub-08/04-15_00-20/20.pth",
                         help="Path to the trained ATMS .pth checkpoint "
-                             "(from Train_Unet_NonZeroShot.py)"
-                             , default="/hhome/ricse01/TFM/TFM/models/nonzeroshot/ATMS/sub-08/04-15_00-20/20.pth")
+                             "(from Train_Unet_NonZeroShot.py)")
     parser.add_argument('--diffusion_ckpt', type=str,
                         default="/hhome/ricse01/TFM/required/sub-08/diffusion_prior.pt",
                         help="Path to the diffusion prior checkpoint")
