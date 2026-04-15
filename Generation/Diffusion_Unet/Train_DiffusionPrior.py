@@ -284,7 +284,7 @@ def extract_id_from_string(s):
 
     
 
-def get_eegfeatures(sub, eegmodel, dataloader, device, text_features_all, img_features_all, k):
+def get_eegfeatures(sub, eegmodel, dataloader, device, text_features_all, img_features_all, k, mode):
     eegmodel.eval()
     text_features_all = text_features_all.to(device).float()
     img_features_all = img_features_all.to(device).float()
@@ -364,7 +364,7 @@ def get_eegfeatures(sub, eegmodel, dataloader, device, text_features_all, img_fe
             print("OVER")
             features_tensor = torch.cat(features_list, dim=0)
             print("features_tensor", features_tensor.shape)
-            torch.save(features_tensor.cpu(), f"ATM_S_eeg_features_{sub}.pt")  # Save features as .pt file
+            torch.save(features_tensor.cpu(), f"ATM_S_eeg_features_{sub}_{mode}.pt")  # Save features as .pt file
     average_loss = total_loss / (batch_idx+1)
     accuracy = correct / total
     return average_loss, accuracy, labels, features_tensor.cpu()
@@ -407,7 +407,7 @@ test_dataset = EEGDataset(data_path, subjects= [sub], train=False)
 test_loader = DataLoader(test_dataset, batch_size=config["batch_size"], shuffle=False, num_workers=0)
 text_features_test_all = test_dataset.text_features
 img_features_test_all = test_dataset.img_features
-test_loss, test_accuracy,labels, eeg_features_test = get_eegfeatures(sub, eeg_model, test_loader, device, text_features_test_all, img_features_test_all,k=200)
+test_loss, test_accuracy,labels, eeg_features_test = get_eegfeatures(sub, eeg_model, test_loader, device, text_features_test_all, img_features_test_all,k=200, mode="test")
 print(f" - Test Loss: {test_loss:.4f}, Test Accuracy: {test_accuracy:.4f}")
 
 # --- cell ---
@@ -417,7 +417,7 @@ train_loader = DataLoader(train_dataset, batch_size=config["batch_size"], shuffl
 text_features_test_all = train_dataset.text_features
 img_features_test_all = train_dataset.img_features
 
-train_loss, train_accuracy, labels, eeg_features_train = get_eegfeatures(sub, eeg_model, train_loader, device, text_features_test_all, img_features_test_all,k=200)
+train_loss, train_accuracy, labels, eeg_features_train = get_eegfeatures(sub, eeg_model, train_loader, device, text_features_test_all, img_features_test_all,k=200, mode="train")
 print(f" - Test Loss: {train_loss:.4f}, Test Accuracy: {train_accuracy:.4f}")
 #####################################################################################
 
@@ -439,7 +439,7 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 # --- cell ---
 emb_img_train_tensor = emb_img_train['img_features']  # this is a tensor
 emb_img_train_4 = emb_img_train_tensor.view(1654, 10, 1, 1024).repeat(1, 1, 4, 1).view(-1, 1024)
-emb_eeg = torch.load('/hhome/ricse01/TFM/TFM/ATM_S_eeg_features_sub-08.pt')
+emb_eeg = torch.load('/hhome/ricse01/TFM/TFM/ATM_S_eeg_features_sub-08_train.pt')
 emb_eeg_test = torch.load('/hhome/ricse01/TFM/TFM/required/ATM_S_eeg_features_sub-08_test.pt')
 
 # --- cell ---
