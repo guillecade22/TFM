@@ -47,12 +47,12 @@ def main():
         description='Train DiffusionPrior (non-zero-shot LOO)')
     parser.add_argument('--data_path', type=str,
         default="/hhome/ricse01/TFM/required/Preprocessed_data_250Hz/Preprocessed_data_250Hz/")
-    parser.add_argument('--atms_checkpoint', type=str, required=True,
+    parser.add_argument('--atms_checkpoint', type=str, default="/hhome/ricse01/TFM/TFM/models/contrast/ATMS_nonzeroshot/sub-08/loo9/04-15_22-12/40.pth",
         help='Path to trained ATMS .pth checkpoint')
     parser.add_argument('--vit_train_features', type=str,
         default="/hhome/ricse01/TFM/authors/ViT-H-14_features_train.pt",
         help='ViT-H-14 features for ALL training images '
-             '(shape: 1654*10 × 1024 or dict with key img_features)')
+             '(shape: 1654*10 X 1024 or dict with key img_features)')
     parser.add_argument('--subject', type=str, default='sub-08')
     parser.add_argument('--leave_one_out_pic', type=int, default=9)
     parser.add_argument('--epochs',     type=int,   default=150)
