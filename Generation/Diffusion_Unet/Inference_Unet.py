@@ -7,10 +7,15 @@ from torch.utils.data import DataLoader
 from PIL import Image
 
 # ----------------- Paths -----------------
+# TEST_DIR = "/hhome/ricse01/TFM/required/test_images"
+# VIT_H_14_FEATURES_TEST_PATH = "/hhome/ricse01/TFM/TFM/ViT-H-14_features_test.pt"
+# MODEL_ATMS_EEG_FEATURES_TEST_PATH = "/hhome/ricse01/TFM/TFM/ATM_S_eeg_features_sub-08_test.pt"
+# DIFFUSION_MODEL_PATH = "/hhome/ricse01/TFM/TFM/fintune_ckpts/ATMS/sub-08/diffusion_prior.pt"
+# SUBJECT = "sub-08"
 TEST_DIR = "/hhome/ricse01/TFM/required/test_images"
-VIT_H_14_FEATURES_TEST_PATH = "/hhome/ricse01/TFM/TFM/ViT-H-14_features_test.pt"
-MODEL_ATMS_EEG_FEATURES_TEST_PATH = "/hhome/ricse01/TFM/TFM/ATM_S_eeg_features_sub-08_test.pt"
-DIFFUSION_MODEL_PATH = "/hhome/ricse01/TFM/TFM/fintune_ckpts/ATMS/sub-08/diffusion_prior.pt"
+VIT_H_14_FEATURES_TEST_PATH = "/hhome/ricse01/TFM/required/ViT-H-14_features_test.pt"
+MODEL_ATMS_EEG_FEATURES_TEST_PATH = "/hhome/ricse01/TFM/required/ATM_S_eeg_features_sub-08_test.pt"
+DIFFUSION_MODEL_PATH = "/hhome/ricse01/TFM/required/sub-08/diffusion_prior.pt"
 SUBJECT = "sub-08"
 
 # ----------------- Device -----------------
