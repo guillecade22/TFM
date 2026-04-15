@@ -13,9 +13,11 @@ from PIL import Image
 # DIFFUSION_MODEL_PATH = "/hhome/ricse01/TFM/required/sub-08/diffusion_prior.pt"
 # SUBJECT = "sub-08"
 
-TEST_DIR = "/hhome/ricse01/TFM/required/test_images"
-VIT_H_14_FEATURES_TEST_PATH = "/hhome/ricse01/TFM/authors/ViT-H-14_features_test.pt"
-MODEL_ATMS_EEG_FEATURES_TEST_PATH = "/hhome/ricse01/TFM/authors/ATM_S_eeg_features_sub-08_test.pt"
+TEST_DIR = "/hhome/ricse01/TFM/required/train_images"
+# VIT_H_14_FEATURES_TEST_PATH = "/hhome/ricse01/TFM/authors/ViT-H-14_features_test.pt"
+# MODEL_ATMS_EEG_FEATURES_TEST_PATH = "/hhome/ricse01/TFM/authors/ATM_S_eeg_features_sub-08_test.pt"
+VIT_H_14_FEATURES_TEST_PATH = "/hhome/ricse01/TFM/authors/ViT-H-14_features_train.pt"
+MODEL_ATMS_EEG_FEATURES_TEST_PATH = "/hhome/ricse01/TFM/authors/ATM_S_eeg_features_sub-08.pt"
 DIFFUSION_MODEL_PATH = "/hhome/ricse01/TFM/authors/diffusion_prior.pt"
 SUBJECT = "sub-08"
 
@@ -73,7 +75,8 @@ for k in range(eeg_test.shape[0]):  # Loop over EEG samples
         h = pipe.generate(c_embeds=eeg_embed, num_inference_steps=50, guidance_scale=5.0)
 
     # Generate 10 images per EEG embedding
-    for j in range(10):
+    for j in range(1):
+    # for j in range(10):
         image = generator.generate(h.to(dtype=torch.float16))
         text_name = texts[k] if k < len(texts) else f"sample_{k}"
         save_path = os.path.join(output_dir, text_name, f"{j}.png")
