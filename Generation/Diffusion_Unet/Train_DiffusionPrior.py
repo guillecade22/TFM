@@ -385,16 +385,15 @@ config = {
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 data_path = config['data_path']
-emb_img_test = torch.load('/hhome/ricse01/TFM/TFM/results_new_train/ViT-H-14_features_test.pt')
-emb_img_train = torch.load('/hhome/ricse01/TFM/TFM/results_new_train/ViT-H-14_features_train.pt')
+emb_img_test = torch.load('/hhome/ricse01/TFM/TFM/ViT-H-14_features_test.pt')
+emb_img_train = torch.load('/hhome/ricse01/TFM/TFM/ViT-H-14_features_train.pt')
 
 eeg_model = ATMS(63, 250)
 print('number of parameters:', sum([p.numel() for p in eeg_model.parameters()]))
 
 #####################################################################################
-
 # eeg_model.load_state_dict(torch.load("/home/ldy/Workspace/Reconstruction/models/contrast/sub-08/01-30_00-44/40.pth"))
-state = torch.load("/hhome/ricse01/TFM/TFM/results_new_train/models/contrast/ATMS/sub-08/04-14_17-19/40.pth")
+state = torch.load("/hhome/ricse01/TFM/TFM/models/contrast/ATMS/sub-08/04-15_14-53/40.pth")
 incompatible = eeg_model.load_state_dict(state, strict=False)
 
 print("Missing keys:", incompatible.missing_keys)
@@ -440,8 +439,8 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 # --- cell ---
 emb_img_train_tensor = emb_img_train['img_features']  # this is a tensor
 emb_img_train_4 = emb_img_train_tensor.view(1654, 10, 1, 1024).repeat(1, 1, 4, 1).view(-1, 1024)
-emb_eeg = torch.load('/hhome/ricse01/TFM/required/ATM_S_eeg_features_sub-08.pt')
-emb_eeg_test = torch.load('/hhome/ricse01/TFM/required/ATM_S_eeg_features_sub-08_test.pt')
+emb_eeg = torch.load('/hhome/ricse01/TFM/TFM/ATM_S_eeg_features_sub-08.pt')
+emb_eeg_test = torch.load('/hhome/ricse01/TFM/TFM/required/ATM_S_eeg_features_sub-08_test.pt')
 
 # --- cell ---
 emb_eeg.shape, emb_eeg_test.shape
