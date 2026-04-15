@@ -440,7 +440,7 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 emb_img_train_tensor = emb_img_train['img_features']  # this is a tensor
 emb_img_train_4 = emb_img_train_tensor.view(1654, 10, 1, 1024).repeat(1, 1, 4, 1).view(-1, 1024)
 emb_eeg = torch.load('/hhome/ricse01/TFM/TFM/ATM_S_eeg_features_sub-08_train.pt')
-emb_eeg_test = torch.load('/hhome/ricse01/TFM/TFM/required/ATM_S_eeg_features_sub-08_test.pt')
+emb_eeg_test = torch.load('/hhome/ricse01/TFM/TFM/ATM_S_eeg_features_sub-08_test.pt')
 
 # --- cell ---
 emb_eeg.shape, emb_eeg_test.shape
