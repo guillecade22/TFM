@@ -50,7 +50,7 @@ def main():
     parser.add_argument('--atms_checkpoint', type=str, default="/hhome/ricse01/TFM/TFM/models/contrast/ATMS_nonzeroshot/sub-08/loo9/04-15_22-12/40.pth",
         help='Path to trained ATMS .pth checkpoint')
     parser.add_argument('--vit_train_features', type=str,
-        default="/hhome/ricse01/TFM/authors/ViT-H-14_features_train.pt",
+        default="/hhome/ricse01/TFM/TFM/ViT-H-14_features_nonzeroshot_train_loo9.pt",
         help='ViT-H-14 features for ALL training images '
              '(shape: 1654*10 X 1024 or dict with key img_features)')
     parser.add_argument('--subject', type=str, default='sub-08')
