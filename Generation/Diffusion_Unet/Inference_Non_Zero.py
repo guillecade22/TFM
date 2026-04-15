@@ -370,7 +370,8 @@ def main():
                         help="Root path to preprocessed EEG data")
     parser.add_argument('--atms_ckpt', type=str, required=True,
                         help="Path to the trained ATMS .pth checkpoint "
-                             "(from Train_Unet_NonZeroShot.py)")
+                             "(from Train_Unet_NonZeroShot.py)"
+                             , default="/hhome/ricse01/TFM/TFM/models/nonzeroshot/ATMS/sub-08/04-15_00-20/20.pth")
     parser.add_argument('--diffusion_ckpt', type=str,
                         default="/hhome/ricse01/TFM/required/sub-08/diffusion_prior.pt",
                         help="Path to the diffusion prior checkpoint")
