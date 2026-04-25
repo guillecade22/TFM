@@ -552,19 +552,19 @@ def main():
     )
     parser.add_argument(
         "--test_dir",
-        default="/hhome/ricse01/TFM/required/test_images",
+        default="/hhome/ricse01/TFM/TFM/required/test",
         help="Flat folder of test images."
     )
     parser.add_argument(
         "--gen_dirs", nargs="+",
         default=[
-            "/hhome/ricse01/TFM/TFM/exp_notext",
-            "/hhome/ricse01/TFM/TFM/exp_simple_caption",
-            "/hhome/ricse01/TFM/TFM/exp_img2img",
-            "/hhome/ricse01/TFM/TFM/exp_img2img_caption",
-            "/hhome/ricse01/TFM/TFM/generated_gt_caption",
-            "/hhome/ricse01/TFM/TFM/balanced",
-            "/hhome/ricse01/TFM/TFM/more_Image",
+            "/hhome/ricse01/TFM/TFM/required/exp_notext",
+            "/hhome/ricse01/TFM/TFM/required/exp_simple_caption",
+            "/hhome/ricse01/TFM/TFM/required/exp_img2img",
+            "/hhome/ricse01/TFM/TFM/required/exp_img2img_caption",
+            "/hhome/ricse01/TFM/TFM/required/generated_gt_caption",
+            "/hhome/ricse01/TFM/TFM/required/balanced",
+            "/hhome/ricse01/TFM/TFM/required/more_Image",
         ],
         help="Experiment output folders, each with reconstructed_XXXX.png"
     )
