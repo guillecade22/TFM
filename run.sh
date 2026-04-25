@@ -22,4 +22,4 @@ source /hhome/ricse01/miniconda3/bin/activate
 
 conda activate BCI
 
-python Generation/Diffusion_Unet/non_zero_shot/Train_DiffusionPrior_nonzeroshot.py
+python Generation/Evaluate/RenconstructionMetricsSDXL.py
