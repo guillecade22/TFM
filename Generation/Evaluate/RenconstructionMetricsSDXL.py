@@ -564,7 +564,7 @@ def main():
             "/hhome/ricse01/TFM/TFM/required/exp_img2img_caption",
             "/hhome/ricse01/TFM/TFM/required/generated_gt_caption",
             "/hhome/ricse01/TFM/TFM/required/balanced",
-            "/hhome/ricse01/TFM/TFM/required/more_Image",
+            "/hhome/ricse01/TFM/TFM/required/more_image",
         ],
         help="Experiment output folders, each with reconstructed_XXXX.png"
     )
