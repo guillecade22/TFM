@@ -98,6 +98,32 @@ class Generator4EmbedsPatched(Generator4Embeds):
         ).images[0]
         return image
 
+    def generate_from_prior_only(self, image_embeds, generator=None):
+        """
+        Decode the raw prior embedding into an image using SDXL with:
+          - no text prompt
+          - ip_adapter_scale = 1.0 (embedding drives everything)
+          - guidance_scale   = 0.0 (turbo mode, no text influence)
+        This shows what the UNet prior alone produces before any caption steering.
+        """
+        image_embeds = image_embeds.to(device=self.device, dtype=self.dtype)
+        # Temporarily override scales for a clean prior-only decode
+        self.pipe.set_ip_adapter_scale(1.0)
+        image = self.pipe.generate_ip_adapter_embeds(
+            prompt='',
+            negative_prompt=None,
+            ip_adapter_embeds=image_embeds,
+            num_inference_steps=self.num_inference_steps,
+            guidance_scale=0.0,
+            generator=generator,
+            img2img_strength=self.img2img_strength,
+            low_level_image=self.low_level_image,
+            low_level_latent=self.low_level_latent,
+        ).images[0]
+        # Restore original scale for subsequent calls
+        self.pipe.set_ip_adapter_scale(IP_ADAPTER_SCALE)
+        return image
+
 
 # --- GENERATION ---------------------------------------------------------------
 
@@ -123,6 +149,15 @@ def generate_antelope_captions(eeg_embeds, antelope_idx, output_dir, seed=42):
         num_inference_steps=10,
         guidance_scale=2.0
     )
+
+    # Save the raw prior output (no caption steering, pure UNet output)
+    gen = torch.Generator(device=device)
+    gen.manual_seed(42)
+    print("Saving raw prior/UNet output (no caption)...")
+    prior_image = generator_sdxl.generate_from_prior_only(h, generator=gen)
+    prior_out_path = os.path.join(output_dir, "antelope_prior_only.png")
+    prior_image.save(prior_out_path)
+    print(f"  Saved: {prior_out_path}")
 
     gen = torch.Generator(device=device)
 
