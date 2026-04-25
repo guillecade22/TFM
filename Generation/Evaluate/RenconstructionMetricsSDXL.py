@@ -564,13 +564,13 @@ def main():
     parser.add_argument(
         "--gen_dirs", nargs="+",
         default=[
-            "/hhome/ricse01/TFM/TFM/exp_notext",
-            "/hhome/ricse01/TFM/TFM/exp_simple_caption",
-            "/hhome/ricse01/TFM/TFM/exp_img2img",
-            "/hhome/ricse01/TFM/TFM/exp_img2img_caption",
-            "/hhome/ricse01/TFM/TFM/generated_gt_caption",
-            "/hhome/ricse01/TFM/TFM/balanced",
-            "/hhome/ricse01/TFM/TFM/more_Image",
+            "/hhome/ricse01/TFM/TFM/required/exp_notext",
+            "/hhome/ricse01/TFM/TFM/required/exp_simple_caption",
+            "/hhome/ricse01/TFM/TFM/required/exp_img2img",
+            "/hhome/ricse01/TFM/TFM/required/exp_img2img_caption",
+            "/hhome/ricse01/TFM/TFM/required/generated_gt_caption",
+            "/hhome/ricse01/TFM/TFM/required/balanced",
+            "/hhome/ricse01/TFM/TFM/required/more_image",
         ],
         help="One or more experiment output folders, each containing reconstructed_XXXX.png"
     )
