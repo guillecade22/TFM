@@ -22,4 +22,4 @@ source /hhome/ricse01/miniconda3/bin/activate
 
 conda activate BCI
 
-python Generation/SDXL/Antelope.py
+python Generation/Evaluate/NewEvaluate.py
