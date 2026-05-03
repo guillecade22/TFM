@@ -291,34 +291,21 @@ def generate_candidates(h, retrieved_classes, generator_sdxl, gen, image_dir):
 
 # --- STAGE 4: RE-RANKING ------------------------------------------------------
 
-def rerank_candidates(candidates, h):
+def rerank_candidates(candidates, eeg_embed):
     """
-    Score each candidate and select the best one.
-
-    Both components are in [0, 1] with equal weights:
-
-        cosine_score = (cosine_sim(candidate_clip_emb, h_norm) + 1) / 2
-                       maps raw cosine [-1, 1] -> [0, 1]
-
-        conf_score   = softmax retrieval confidence (already in [0, 1])
-
-        final_score  = W_COSINE * cosine_score + W_CONFIDENCE * conf_score
-
-    Args:
-        candidates : list of dicts from generate_candidates()
-        h          : Tensor [1, 1, dim] — diffusion prior output
-
-    Returns:
-        scored : list of dicts sorted best-first (original fields + score fields)
-        best   : dict — the top-ranked candidate
+    Score each candidate against the raw EEG embedding directly.
+    
+    cosine_score = (cosine_sim(candidate_clip_emb, eeg_embed_norm) + 1) / 2
+    conf_score   = retrieval confidence (softmax over top-N)
+    final_score  = W_COSINE * cosine_score + W_CONFIDENCE * conf_score
     """
-    h_norm = F.normalize(h.squeeze().unsqueeze(0), dim=-1)  # [1, dim]
+    eeg_norm = F.normalize(eeg_embed.squeeze().unsqueeze(0), dim=-1)  # [1, dim]
 
     scored = []
     for cand in candidates:
         cand_emb    = extract_clip_embedding(cand["image"])   # [1, dim]
 
-        raw_cos     = (cand_emb @ h_norm.T).item()            # [-1, 1]
+        raw_cos     = (cand_emb @ eeg_norm.T).item()          # [-1, 1]
         cos_score   = (raw_cos + 1.0) / 2.0                  # [0, 1]
         conf_score  = cand["confidence"]                      # [0, 1]
         final_score = W_COSINE * cos_score + W_CONFIDENCE * conf_score
@@ -452,7 +439,8 @@ def run_pipeline(eeg_embeds, img_features, class_names,
         # STAGE 4: Re-Ranking
         # ------------------------------------------------------------------
         print("  [Stage 4] Re-ranking candidates...")
-        scored, best = rerank_candidates(candidates, h)
+        scored, best = rerank_candidates(candidates, eeg_embeds[i])  # was: h
+
         print(f"    Selected: '{best['class']}' "
               f"(final={best['final_score']:.4f}, "
               f"cos={best['cosine_score']:.4f}, "
