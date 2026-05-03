@@ -1,27 +1,3 @@
-# =============================================================================
-# EEG-to-Image Reconstruction Pipeline
-# =============================================================================
-# Stages:
-#   1. Class Retrieval       — eeg_embed @ img_features.T -> top-N classes
-#   2. Diffusion Prior       — EEG embedding -> CLIP prior h
-#   3. Candidate Generation  — SDXL + IP-Adapter, one image per top-N class
-#
-# Inputs required:
-#   VIT_H_14_FEATURES_TEST    — per-image CLIP embeddings, shape [200, dim]
-#   ATM_S_EEG_FEATURES_SUB_08 — pre-computed EEG embeddings, shape [200, dim]
-#   DIFFUSION_PRIOR_PATH      — trained diffusion prior weights
-#   TEST_IMAGES_DIR           — folder with one subfolder per class (sorted = class index)
-#
-# Outputs per image:
-#   image_XXXX/
-#     retrieved_classes.json  — top-N classes + raw cosine scores
-#     candidate_0.png         — generated image for rank-0 class
-#     candidate_1.png         — generated image for rank-1 class
-#     ...
-#   pipeline_config.json      — all hyperparameters for reproducibility
-
-# --- CONFIG -------------------------------------------------------------------
-
 VIT_H_14_FEATURES_TEST    = "/hhome/ricse01/TFM/required/ViT-H-14_features_test.pt"
 ATM_S_EEG_FEATURES_SUB_08 = "/hhome/ricse01/TFM/required/ATM_S_eeg_features_sub-08_test.pt"
 DIFFUSION_PRIOR_PATH       = "/hhome/ricse01/TFM/required/sub-08/diffusion_prior.pt"
@@ -39,14 +15,20 @@ PRIOR_GUIDANCE_SCALE = 2.0    # diffusion prior guidance scale
 NEGATIVE_PROMPT      = "cartoon, illustration, painting, drawing, render, cgi, blurry, low quality, artificial"
 SEED                 = 42
 
+# Re-ranking weights — must sum to 1.0
+W_RETRIEVAL  = 0.5   # eeg_embed @ class_img_embed  (from retrieval)
+W_CANDIDATE  = 0.5   # candidate_clip_embed @ h      (generated image vs prior)
+
 # --- IMPORTS ------------------------------------------------------------------
 
 import os
 import sys
 import json
+import shutil
 import argparse
 import torch
 import torch.nn.functional as F
+from PIL import Image
 
 sys.path.append("../")
 from shared.diffusion_prior import DiffusionPriorUNet, Pipe
@@ -101,6 +83,32 @@ def load_diffusion_prior():
     )
     print("Diffusion prior loaded.")
     return pipe
+
+
+# --- CLIP MODEL (for re-ranking) ----------------------------------------------
+
+_clip_model   = None
+_clip_preproc = None
+
+def get_clip_model():
+    global _clip_model, _clip_preproc
+    if _clip_model is None:
+        import open_clip
+        _clip_model, _, _clip_preproc = open_clip.create_model_and_transforms(
+            "ViT-H-14", pretrained="laion2b_s32b_b79k"
+        )
+        _clip_model = _clip_model.to(device).eval()
+        print("  [CLIP] ViT-H-14 loaded for re-ranking.")
+    return _clip_model, _clip_preproc
+
+
+def extract_clip_embedding(pil_image):
+    """Returns L2-normalised CLIP embedding of a PIL image, shape [1, dim]."""
+    model, preproc = get_clip_model()
+    img_tensor = preproc(pil_image).unsqueeze(0).to(device)
+    with torch.no_grad():
+        emb = model.encode_image(img_tensor)
+    return F.normalize(emb, dim=-1)
 
 
 # --- STAGE 1: CLASS RETRIEVAL -------------------------------------------------
@@ -181,12 +189,9 @@ class Generator4EmbedsPatched(Generator4Embeds):
 
 def generate_candidates(h, retrieved_classes, generator_sdxl, gen, image_dir):
     """
-    Generate one SDXL image per retrieved class.
-    Each image is conditioned on:
-      - h via IP-Adapter : structural prior from the EEG diffusion prior
-      - class name       : semantic text guidance
-
-    Saves candidate_K.png to image_dir and returns the list of saved paths.
+    Generate one SDXL image per retrieved class conditioned on h and class name.
+    Saves candidate_K.png to image_dir.
+    Returns list of dicts: rank, class, raw_cosine, image (PIL), path.
     """
     candidates = []
     for item in retrieved_classes:
@@ -202,10 +207,65 @@ def generate_candidates(h, retrieved_classes, generator_sdxl, gen, image_dir):
 
         path = os.path.join(image_dir, f"candidate_{rank}.png")
         image.save(path)
-        candidates.append({"rank": rank, "class": item["class"], "path": path})
+        candidates.append({
+            "rank":       rank,
+            "class":      item["class"],
+            "raw_cosine": item["raw_cosine"],
+            "image":      image,
+            "path":       path,
+        })
         print(f"    candidate_{rank}: '{prompt}' -> saved")
 
     return candidates
+
+
+# --- STAGE 4: RE-RANKING ------------------------------------------------------
+
+def rerank_candidates(candidates, h):
+    """
+    Score each candidate using a weighted vote between:
+
+        score_retrieval = (raw_cosine_retrieval + 1) / 2
+                          eeg_embed @ class_img_embed, already in retrieved_classes
+
+        score_candidate = (cosine_sim(candidate_clip_embed, h) + 1) / 2
+                          how similar the generated image is to the prior output
+
+        final_score = W_RETRIEVAL * score_retrieval + W_CANDIDATE * score_candidate
+
+    Returns scored list sorted best-first, and the best candidate.
+    """
+    h_norm = F.normalize(h.squeeze().unsqueeze(0), dim=-1)  # [1, dim]
+
+    scored = []
+    for cand in candidates:
+        # Score 1: retrieval cosine mapped to [0, 1]
+        score_retrieval = (cand["raw_cosine"] + 1.0) / 2.0
+
+        # Score 2: candidate CLIP embedding vs h, mapped to [0, 1]
+        cand_emb        = extract_clip_embedding(cand["image"])   # [1, dim]
+        raw_candidate   = (cand_emb @ h_norm.T).item()
+        score_candidate = (raw_candidate + 1.0) / 2.0
+
+        final_score = W_RETRIEVAL * score_retrieval + W_CANDIDATE * score_candidate
+
+        scored.append({
+            "rank":           cand["rank"],
+            "class":          cand["class"],
+            "candidate_path": cand["path"],
+            "scores": {
+                "raw_retrieval":   round(cand["raw_cosine"], 6),
+                "raw_candidate":   round(raw_candidate,      6),
+                "score_retrieval": round(score_retrieval,    6),
+                "score_candidate": round(score_candidate,    6),
+                "w_retrieval":     W_RETRIEVAL,
+                "w_candidate":     W_CANDIDATE,
+                "final_score":     round(final_score,        6),
+            },
+        })
+
+    scored.sort(key=lambda x: x["scores"]["final_score"], reverse=True)
+    return scored, scored[0]
 
 
 # --- MAIN PIPELINE ------------------------------------------------------------
@@ -225,7 +285,6 @@ def run_pipeline(eeg_embeds, img_features, class_names,
         f"Check TEST_IMAGES_DIR has exactly one subfolder per test image."
     )
 
-    # Save config for reproducibility
     config = {
         "top_n":                TOP_N,
         "ip_adapter_scale":     IP_ADAPTER_SCALE,
@@ -234,6 +293,8 @@ def run_pipeline(eeg_embeds, img_features, class_names,
         "prior_steps":          PRIOR_STEPS,
         "prior_guidance_scale": PRIOR_GUIDANCE_SCALE,
         "negative_prompt":      NEGATIVE_PROMPT,
+        "w_retrieval":          W_RETRIEVAL,
+        "w_candidate":          W_CANDIDATE,
         "seed":                 seed,
     }
     with open(os.path.join(output_dir, "pipeline_config.json"), "w") as f:
@@ -270,7 +331,21 @@ def run_pipeline(eeg_embeds, img_features, class_names,
 
         # Stage 3: Candidate Generation
         print(f"  [Stage 3] Generating {TOP_N} candidates...")
-        generate_candidates(h, retrieved, generator_sdxl, gen, image_dir)
+        candidates = generate_candidates(h, retrieved, generator_sdxl, gen, image_dir)
+
+        # Stage 4: Re-Ranking
+        print("  [Stage 4] Re-ranking candidates...")
+        scored, best = rerank_candidates(candidates, h)
+        print(f"    Selected: '{best['class']}' "
+              f"(final={best['scores']['final_score']:.4f}, "
+              f"retrieval={best['scores']['score_retrieval']:.4f}, "
+              f"candidate={best['scores']['score_candidate']:.4f})")
+
+        with open(os.path.join(image_dir, "rerank_scores.json"), "w") as f:
+            json.dump(scored, f, indent=2)
+
+        shutil.copy2(best["candidate_path"],
+                     os.path.join(image_dir, "selected.png"))
 
     print(f"\n{'='*60}")
     print(f"Done. {n} images processed. Output: {output_dir}")
@@ -283,7 +358,7 @@ def main():
     global TOP_N, OUTPUT_DIR
 
     parser = argparse.ArgumentParser(
-        description="EEG-to-Image pipeline: retrieve -> prior -> generate"
+        description="EEG-to-Image pipeline: retrieve -> prior -> generate -> rerank"
     )
     parser.add_argument("--top_n",  type=int, default=TOP_N,
                         help=f"Number of candidates per image (default: {TOP_N})")
