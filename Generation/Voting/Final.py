@@ -489,6 +489,9 @@ def run_pipeline(eeg_embeds, img_features, class_names,
 # --- ENTRY POINT --------------------------------------------------------------
 
 def main():
+
+    global TOP_N, OUTPUT_DIR
+
     parser = argparse.ArgumentParser(
         description="EEG-to-Image pipeline: retrieve -> prior -> generate -> rerank"
     )
@@ -502,7 +505,7 @@ def main():
                         help="Process only the first N images (for debugging)")
     args = parser.parse_args()
 
-    global TOP_N, OUTPUT_DIR
+
     TOP_N      = args.top_n
     OUTPUT_DIR = args.output
 
