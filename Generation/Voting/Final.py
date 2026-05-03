@@ -146,10 +146,11 @@ def retrieve_top_n_classes(eeg_embed, img_features_norm, class_names, top_n):
     # Cosine similarities: [num_classes]
     sims = (eeg_flat @ img_features_norm.T).squeeze(0)
 
-    # Softmax -> confidence in [0, 1]
-    confidences = F.softmax(sims, dim=0)
+    # Get top-N by raw cosine similarity first
+    top_vals, top_idx = torch.topk(sims, k=top_n)
 
-    top_vals, top_idx = torch.topk(confidences, k=top_n)
+    # Softmax only over the top-N raw cosines -> confidence in [0, 1]
+    confidences = F.softmax(top_vals, dim=0)
 
     retrieved = []
     for rank, (idx, conf) in enumerate(zip(top_idx.tolist(), top_vals.tolist())):
@@ -157,7 +158,7 @@ def retrieve_top_n_classes(eeg_embed, img_features_norm, class_names, top_n):
             "rank":       rank,
             "class":      class_names[idx],
             "class_idx":  idx,
-            "confidence": round(conf, 6),
+            "confidence": round(confidences[rank].item(), 6),
             "raw_cosine": round(sims[idx].item(), 6),
         })
 
