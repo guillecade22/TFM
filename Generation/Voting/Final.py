@@ -16,8 +16,8 @@ NEGATIVE_PROMPT      = "cartoon, illustration, painting, drawing, render, cgi, b
 SEED                 = 42
 
 # Re-ranking weights — must sum to 1.0
-W_RETRIEVAL  = 0.25   # eeg_embed @ class_img_embed  (from retrieval)
-W_CANDIDATE  = 0.75   # candidate_clip_embed @ h      (generated image vs prior)
+W_RETRIEVAL  = 0.75   # eeg_embed @ class_img_embed  (from retrieval)
+W_CANDIDATE  = 0.25   # candidate_clip_embed @ h      (generated image vs prior)
 
 # --- IMPORTS ------------------------------------------------------------------
 
