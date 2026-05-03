@@ -250,7 +250,7 @@ def rerank_candidates(candidates, h):
         final_score = W_RETRIEVAL * score_retrieval + W_CANDIDATE * score_candidate
 
         scored.append({
-            "rank":           cand["rank"],
+            "old_rank":       cand["rank"],
             "class":          cand["class"],
             "candidate_path": cand["path"],
             "scores": {
@@ -265,6 +265,10 @@ def rerank_candidates(candidates, h):
         })
 
     scored.sort(key=lambda x: x["scores"]["final_score"], reverse=True)
+
+    for new_rank, item in enumerate(scored):
+        item["new_rank"] = new_rank
+
     return scored, scored[0]
 
 
@@ -340,9 +344,17 @@ def run_pipeline(eeg_embeds, img_features, class_names,
               f"(final={best['scores']['final_score']:.4f}, "
               f"retrieval={best['scores']['score_retrieval']:.4f}, "
               f"candidate={best['scores']['score_candidate']:.4f})")
+        
+        gt_class = class_names[i]
+        rerank_output = {
+            "gt_class":      gt_class,
+            "selected_class": best["class"],
+            "is_correct":    best["class"] == gt_class,
+            "candidates":    scored,
+        }
 
         with open(os.path.join(image_dir, "rerank_scores.json"), "w") as f:
-            json.dump(scored, f, indent=2)
+            json.dump(rerank_output, f, indent=2)
 
         shutil.copy2(best["candidate_path"],
                      os.path.join(image_dir, "selected.png"))
