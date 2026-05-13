@@ -182,11 +182,12 @@ def main():
     parser.add_argument(
         "--experiments", nargs="+",
         default=[
-        "w=0.0/1.0:/hhome/ricse01/TFM/TFM/pipeline_output_0_1",
-        "w=0.25/0.75:/hhome/ricse01/TFM/TFM/pipeline_output_25_75",
-        "w=0.75/0.25:/hhome/ricse01/TFM/TFM/pipeline_output_75_25",
-        "w=0.5/0.5:/hhome/ricse01/TFM/TFM/pipeline_output_50_50",
-        "w=1.0/0.0:/hhome/ricse01/TFM/TFM/pipeline_output_1_0",
+        "w=0.0/1.0:/hhome/ricse01/TFM/TFM/pipeline_output",
+        # "w=0.0/1.0:/hhome/ricse01/TFM/TFM/pipeline_output_0_1",
+        # "w=0.25/0.75:/hhome/ricse01/TFM/TFM/pipeline_output_25_75",
+        # "w=0.75/0.25:/hhome/ricse01/TFM/TFM/pipeline_output_75_25",
+        # "w=0.5/0.5:/hhome/ricse01/TFM/TFM/pipeline_output_50_50",
+        # "w=1.0/0.0:/hhome/ricse01/TFM/TFM/pipeline_output_1_0",
         ],
         metavar="LABEL:PATH",
         help='List of experiments as "label:path" pairs.',
