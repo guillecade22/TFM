@@ -221,7 +221,7 @@ def generate_candidates(h, retrieved_classes, generator_sdxl, gen, image_dir):
 
 # --- STAGE 4: RE-RANKING ------------------------------------------------------
 
-def rerank_candidates(candidates, h):
+def rerank_candidates(candidates, eeg_embed):
     """
     Score each candidate using a weighted vote between:
 
@@ -235,14 +235,14 @@ def rerank_candidates(candidates, h):
 
     Returns scored list sorted best-first, and the best candidate.
     """
-    h_norm = F.normalize(h.squeeze().unsqueeze(0), dim=-1)  # [1, dim]
+    h_norm = F.normalize(eeg_embed.squeeze().unsqueeze(0), dim=-1)  # [1, dim]
 
     scored = []
     for cand in candidates:
         # Score 1: retrieval cosine mapped to [0, 1]
         score_retrieval = (cand["raw_cosine"] + 1.0) / 2.0
 
-        # Score 2: candidate CLIP embedding vs h, mapped to [0, 1]
+        # Score 2: candidate CLIP embedding vs EEG embedding, mapped to [0, 1]
         cand_emb        = extract_clip_embedding(cand["image"])   # [1, dim]
         raw_candidate   = (cand_emb @ h_norm.T).item()
         score_candidate = (raw_candidate + 1.0) / 2.0
@@ -339,7 +339,7 @@ def run_pipeline(eeg_embeds, img_features, class_names,
 
         # Stage 4: Re-Ranking
         print("  [Stage 4] Re-ranking candidates...")
-        scored, best = rerank_candidates(candidates, h)
+        scored, best = rerank_candidates(candidates, eeg_embeds[i])
         print(f"    Selected: '{best['class']}' "
               f"(final={best['scores']['final_score']:.4f}, "
               f"retrieval={best['scores']['score_retrieval']:.4f}, "
