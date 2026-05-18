@@ -22,4 +22,4 @@ source /hhome/ricse01/miniconda3/bin/activate
 
 conda activate BCI
 
-python Generation/Voting/ManualWights.py
+python Generation/Voting/NewVotingLPIPS.py
