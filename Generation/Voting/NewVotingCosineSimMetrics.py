@@ -1,21 +1,20 @@
 # =============================================================================
-# EEG-to-Image Reconstruction Pipeline
+# EEG-to-Image Reconstruction Pipeline with Weight Optimization
 # =============================================================================
 # Stages:
 #   1. Class Retrieval       — eeg_embed @ img_features.T -> top-N classes
 #   2. Diffusion Prior       — EEG embedding -> CLIP prior h
 #   3. Candidate Generation  — SDXL + IP-Adapter, one image per top-N class
-#   4. Re-Ranking            — weighted vote between:
+#   4. Weight Optimization   — gradient descent over:
 #
-#       score_retrieval = cosine_sim(eeg_embed,      img_features[class_K_idx])
-#                         how strongly the EEG points to this class
+#       score_retrieval = cosine_sim(eeg_embed,      img_features[class_idx])
+#       score_fidelity  = cosine_sim(candidate_clip, img_features[class_idx])
+#       final_score     = W_RETRIEVAL * score_retrieval + W_FIDELITY * score_fidelity
 #
-#       score_fidelity  = cosine_sim(candidate_clip, img_features[class_K_idx])
-#                         how faithfully SDXL generated the intended class
-#                         (verified against the same class reference image bank
-#                          used in retrieval — no ground truth label used)
+#   5. Re-Ranking            — apply optimized weights, select best candidate
 #
-#       final_score = W_RETRIEVAL * score_retrieval + W_FIDELITY * score_fidelity
+# Generation (phases 1-3) runs once.
+# Optimization (phase 4) can be re-run cheaply with --opt_only.
 
 # --- CONFIG -------------------------------------------------------------------
 
@@ -36,9 +35,14 @@ PRIOR_GUIDANCE_SCALE = 2.0
 NEGATIVE_PROMPT      = "cartoon, illustration, painting, drawing, render, cgi, blurry, low quality, artificial"
 SEED                 = 42
 
-# Re-ranking weights — must sum to 1.0
-W_RETRIEVAL = 0.5   # cosine_sim(eeg_embed,      img_features[class_K_idx])
-W_FIDELITY  = 0.5   # cosine_sim(candidate_clip, img_features[class_K_idx])
+# Initial weights (will be overwritten by optimization)
+W_RETRIEVAL = 0.5
+W_FIDELITY  = 0.5
+
+# Gradient descent hyperparameters
+OPT_LR        = 0.01
+OPT_STEPS     = 500
+OPT_LOG_EVERY = 50
 
 # --- IMPORTS ------------------------------------------------------------------
 
@@ -118,7 +122,6 @@ def get_clip_model():
 
 
 def extract_clip_embedding(pil_image):
-    """Returns L2-normalised CLIP embedding of a PIL image, shape [1, dim]."""
     model, preproc = get_clip_model()
     img_tensor = preproc(pil_image).unsqueeze(0).to(device)
     with torch.no_grad():
@@ -130,13 +133,8 @@ def extract_clip_embedding(pil_image):
 
 def retrieve_top_n_classes(eeg_embed, img_features_norm, class_names, top_n):
     """
-    Retrieve top-N classes by comparing the EEG embedding against all
-    per-image CLIP embeddings:
-
-        similarities = eeg_embed @ img_features_norm.T
-
-    Returns list of top_n dicts sorted by rank (best first):
-        rank, class, class_idx, raw_cosine
+    Retrieve top-N classes: eeg_embed @ img_features_norm.T
+    Returns list of dicts: rank, class, class_idx, raw_cosine
     """
     eeg_norm = F.normalize(eeg_embed.squeeze().unsqueeze(0), dim=-1)
     sims     = (eeg_norm @ img_features_norm.T).squeeze(0)
@@ -156,7 +154,6 @@ def retrieve_top_n_classes(eeg_embed, img_features_norm, class_names, top_n):
 # --- STAGE 2: DIFFUSION PRIOR -------------------------------------------------
 
 def run_diffusion_prior(prior_pipe, eeg_embed):
-    """EEG embedding -> CLIP prior h via the Diffusion Prior UNet."""
     return prior_pipe.generate(
         c_embeds=eeg_embed,
         num_inference_steps=PRIOR_STEPS,
@@ -167,8 +164,6 @@ def run_diffusion_prior(prior_pipe, eeg_embed):
 # --- PATCHED GENERATOR --------------------------------------------------------
 
 class Generator4EmbedsPatched(Generator4Embeds):
-    """Extends Generator4Embeds to expose ip_adapter_scale and guidance_scale."""
-
     def __init__(self, num_inference_steps=15, device="cuda",
                  ip_adapter_scale=0.75, guidance_scale=3.0):
         super().__init__(num_inference_steps=num_inference_steps, device=device)
@@ -194,16 +189,25 @@ class Generator4EmbedsPatched(Generator4Embeds):
 
 # --- STAGE 3: CANDIDATE GENERATION --------------------------------------------
 
-def generate_candidates(h, retrieved_classes, generator_sdxl, gen, image_dir):
+def generate_candidates(h, retrieved_classes, generator_sdxl, gen,
+                        image_dir, img_features_norm):
     """
-    Generate one SDXL image per retrieved class conditioned on h and class name.
-    Saves candidate_K.png to image_dir.
-    Returns list of dicts: rank, class, class_idx, raw_cosine, image, path.
+    Generate one SDXL image per retrieved class.
+    Also computes and saves both scores per candidate so optimization
+    can run without reloading images.
+
+    Saves per candidate:
+        candidate_K.png
+        candidate_K_scores.json  — raw_retrieval, raw_fidelity
+
+    Returns list of dicts: rank, class, class_idx, raw_cosine,
+                           raw_fidelity, image, path.
     """
     candidates = []
     for item in retrieved_classes:
-        rank   = item["rank"]
-        prompt = make_prompt(item["class"])
+        rank      = item["rank"]
+        class_idx = item["class_idx"]
+        prompt    = make_prompt(item["class"])
 
         image = generator_sdxl.generate(
             h,
@@ -214,72 +218,167 @@ def generate_candidates(h, retrieved_classes, generator_sdxl, gen, image_dir):
 
         path = os.path.join(image_dir, f"candidate_{rank}.png")
         image.save(path)
+
+        # Fidelity: cosine_sim(candidate_clip, img_features[class_idx])
+        class_ref    = img_features_norm[class_idx].unsqueeze(0)    # [1, dim]
+        cand_emb     = extract_clip_embedding(image)                # [1, dim]
+        raw_fidelity = (cand_emb @ class_ref.T).item()
+
+        # Save scores to disk for later optimization
+        scores_path = os.path.join(image_dir, f"candidate_{rank}_scores.json")
+        with open(scores_path, "w") as f:
+            json.dump({
+                "raw_retrieval": item["raw_cosine"],
+                "raw_fidelity":  round(raw_fidelity, 6),
+            }, f)
+
         candidates.append({
-            "rank":       rank,
-            "class":      item["class"],
-            "class_idx":  item["class_idx"],
-            "raw_cosine": item["raw_cosine"],
-            "image":      image,
-            "path":       path,
+            "rank":         rank,
+            "class":        item["class"],
+            "class_idx":    class_idx,
+            "raw_cosine":   item["raw_cosine"],
+            "raw_fidelity": raw_fidelity,
+            "image":        image,
+            "path":         path,
         })
-        print(f"    candidate_{rank}: '{prompt}' -> saved")
+        print(f"    candidate_{rank}: '{prompt}'  "
+              f"retrieval={item['raw_cosine']:.3f}  "
+              f"fidelity={raw_fidelity:.3f}")
 
     return candidates
 
 
-# --- STAGE 4: RE-RANKING ------------------------------------------------------
+# --- STAGE 4: WEIGHT OPTIMIZATION VIA GRADIENT DESCENT -----------------------
 
-def rerank_candidates(candidates, img_features_norm):
+def load_all_scores(output_dir, class_names, top_n):
     """
-    Score each candidate using a weighted vote between:
-
-        score_retrieval = (raw_cosine + 1) / 2
-                          cosine_sim(eeg_embed, img_features[class_idx])
-                          already computed during retrieval
-
-        score_fidelity  = (cosine_sim(candidate_clip, img_features[class_idx]) + 1) / 2
-                          how faithfully SDXL generated the intended class,
-                          verified against the class reference image in CLIP space
-
-        final_score = W_RETRIEVAL * score_retrieval + W_FIDELITY * score_fidelity
-
-    Both scores use the same img_features_norm already loaded — no extra data needed.
-
-    Args:
-        candidates        : list of dicts from generate_candidates()
-        img_features_norm : Tensor [num_classes, dim], L2-normalised
+    Load saved candidate scores for all images.
 
     Returns:
-        scored : list of dicts sorted best-first
-        best   : dict — the top-ranked candidate
+        score_retrieval : Tensor [N, top_n]  — (raw_retrieval + 1) / 2
+        score_fidelity  : Tensor [N, top_n]  — (raw_fidelity  + 1) / 2
+        gt_indices      : Tensor [N]          — index of gt in top-n (-1 if absent)
     """
+    image_dirs = sorted([
+        os.path.join(output_dir, d)
+        for d in os.listdir(output_dir)
+        if d.startswith("image_") and os.path.isdir(os.path.join(output_dir, d))
+    ])
+
+    all_score_retrieval = []
+    all_score_fidelity  = []
+    all_gt_indices      = []
+
+    for image_dir in image_dirs:
+        image_idx = int(os.path.basename(image_dir).split("_")[1])
+        gt_class  = class_names[image_idx]
+
+        with open(os.path.join(image_dir, "retrieved_classes.json")) as f:
+            retrieved = json.load(f)
+
+        retrieved_classes = [r["class"] for r in retrieved]
+        gt_idx = retrieved_classes.index(gt_class) if gt_class in retrieved_classes else -1
+
+        row_retrieval = []
+        row_fidelity  = []
+
+        for r in retrieved:
+            scores_path = os.path.join(image_dir, f"candidate_{r['rank']}_scores.json")
+            with open(scores_path) as f:
+                scores = json.load(f)
+
+            row_retrieval.append((scores["raw_retrieval"] + 1.0) / 2.0)
+            row_fidelity.append( (scores["raw_fidelity"]  + 1.0) / 2.0)
+
+        all_score_retrieval.append(row_retrieval)
+        all_score_fidelity.append(row_fidelity)
+        all_gt_indices.append(gt_idx)
+
+    return (
+        torch.tensor(all_score_retrieval, dtype=torch.float32),
+        torch.tensor(all_score_fidelity,  dtype=torch.float32),
+        torch.tensor(all_gt_indices,      dtype=torch.long),
+    )
+
+
+def optimize_weights(score_retrieval, score_fidelity, gt_indices):
+    """
+    Find optimal W_RETRIEVAL and W_FIDELITY via gradient descent.
+
+    Objective: maximise log-probability of the correct candidate (cross-entropy).
+
+        final_score[i, k] = w_r * score_retrieval[i, k] + w_f * score_fidelity[i, k]
+        loss = cross_entropy(final_score, gt_indices)
+
+    Weights are parameterised via softmax to always sum to 1 and stay in [0, 1].
+    Only images where gt is in the top-N contribute to the loss.
+
+    Returns:
+        w_retrieval, w_fidelity : optimised floats
+        loss_history            : list of loss values
+    """
+    mask = gt_indices >= 0
+    sr   = score_retrieval[mask].to(device)
+    sf   = score_fidelity[mask].to(device)
+    gt   = gt_indices[mask].to(device)
+
+    print(f"\n  [Optimizer] {mask.sum().item()}/{len(gt_indices)} images "
+          f"have gt in top-{TOP_N}")
+    print(f"  [Optimizer] Running {OPT_STEPS} steps, lr={OPT_LR}")
+
+    logits    = torch.zeros(2, requires_grad=True, device=device)
+    optimizer = torch.optim.Adam([logits], lr=OPT_LR)
+
+    loss_history = []
+
+    for step in range(OPT_STEPS):
+        optimizer.zero_grad()
+
+        w         = F.softmax(logits, dim=0)
+        scores    = w[0] * sr + w[1] * sf              # [M, top_n]
+        log_probs = F.log_softmax(scores, dim=1)        # [M, top_n]
+        loss      = F.nll_loss(log_probs, gt)
+
+        loss.backward()
+        optimizer.step()
+        loss_history.append(loss.item())
+
+        if step % OPT_LOG_EVERY == 0 or step == OPT_STEPS - 1:
+            w_ = F.softmax(logits, dim=0)
+            print(f"  step {step:4d} | loss={loss.item():.4f} | "
+                  f"w_retrieval={w_[0].item():.4f}  "
+                  f"w_fidelity={w_[1].item():.4f}")
+
+    final       = F.softmax(logits, dim=0).detach()
+    w_retrieval = final[0].item()
+    w_fidelity  = final[1].item()
+    print(f"\n  Optimized: w_retrieval={w_retrieval:.4f}  "
+          f"w_fidelity={w_fidelity:.4f}")
+
+    return w_retrieval, w_fidelity, loss_history
+
+
+# --- STAGE 5: RE-RANKING WITH GIVEN WEIGHTS -----------------------------------
+
+def rerank_candidates(candidates, w_retrieval, w_fidelity):
     scored = []
     for cand in candidates:
-        # Reference embedding for this candidate's class
-        class_ref = img_features_norm[cand["class_idx"]].unsqueeze(0)  # [1, dim]
-
-        # Score 1: retrieval cosine (eeg @ class_ref), already computed
-        score_retrieval = (cand["raw_cosine"] + 1.0) / 2.0
-
-        # Score 2: fidelity — how much the generated image looks like its class ref
-        cand_emb       = extract_clip_embedding(cand["image"])          # [1, dim]
-        raw_fidelity   = (cand_emb @ class_ref.T).item()               # [-1, 1]
-        score_fidelity = (raw_fidelity + 1.0) / 2.0                    # [0, 1]
-
-        final_score = W_RETRIEVAL * score_retrieval + W_FIDELITY * score_fidelity
+        score_retrieval = (cand["raw_cosine"]   + 1.0) / 2.0
+        score_fidelity  = (cand["raw_fidelity"] + 1.0) / 2.0
+        final_score     = w_retrieval * score_retrieval + w_fidelity * score_fidelity
 
         scored.append({
             "old_rank":       cand["rank"],
             "class":          cand["class"],
             "candidate_path": cand["path"],
             "scores": {
-                "raw_retrieval":   round(cand["raw_cosine"], 6),
-                "raw_fidelity":    round(raw_fidelity,       6),
-                "score_retrieval": round(score_retrieval,    6),
-                "score_fidelity":  round(score_fidelity,     6),
-                "w_retrieval":     W_RETRIEVAL,
-                "w_fidelity":      W_FIDELITY,
-                "final_score":     round(final_score,        6),
+                "raw_retrieval":   round(cand["raw_cosine"],   6),
+                "raw_fidelity":    round(cand["raw_fidelity"], 6),
+                "score_retrieval": round(score_retrieval,      6),
+                "score_fidelity":  round(score_fidelity,       6),
+                "w_retrieval":     round(w_retrieval,          6),
+                "w_fidelity":      round(w_fidelity,           6),
+                "final_score":     round(final_score,          6),
             },
         })
 
@@ -305,40 +404,28 @@ def run_pipeline(eeg_embeds, img_features, class_names,
         f"({img_features_norm.shape[0]})."
     )
 
-    with open(os.path.join(output_dir, "pipeline_config.json"), "w") as f:
-        json.dump({
-            "top_n":                TOP_N,
-            "ip_adapter_scale":     IP_ADAPTER_SCALE,
-            "guidance_scale":       GUIDANCE_SCALE,
-            "num_inference_steps":  NUM_INFERENCE_STEPS,
-            "prior_steps":          PRIOR_STEPS,
-            "prior_guidance_scale": PRIOR_GUIDANCE_SCALE,
-            "negative_prompt":      NEGATIVE_PROMPT,
-            "w_retrieval":          W_RETRIEVAL,
-            "w_fidelity":           W_FIDELITY,
-            "seed":                 seed,
-        }, f, indent=2)
-
     gen = torch.Generator(device=device)
     gen.manual_seed(seed)
 
-    print(f"\nRunning pipeline on {n} EEG embeddings...")
-    print(f"Output: {output_dir}\n")
+    # ------------------------------------------------------------------
+    # PHASE 1: Generate all candidates and compute scores
+    # ------------------------------------------------------------------
+    print(f"\n{'='*60}")
+    print("PHASE 1: Generation")
+    print(f"{'='*60}")
+
+    all_candidates = []
 
     for i in range(n):
-        print(f"\n{'='*60}")
-        print(f"Image {i:04d} / {n-1}")
-        print(f"{'='*60}")
-
+        print(f"\n[{i:04d}/{n-1}]")
         image_dir = os.path.join(output_dir, f"image_{i:04d}")
         os.makedirs(image_dir, exist_ok=True)
 
         # Stage 1: Retrieval
-        print("  [Stage 1] Retrieving top-N classes...")
         retrieved = retrieve_top_n_classes(
             eeg_embeds[i], img_features_norm, class_names, TOP_N
         )
-        print("    " + ", ".join(
+        print("  [Stage 1] " + ", ".join(
             f"{r['class']}({r['raw_cosine']:.3f})" for r in retrieved
         ))
         with open(os.path.join(image_dir, "retrieved_classes.json"), "w") as f:
@@ -348,32 +435,87 @@ def run_pipeline(eeg_embeds, img_features, class_names,
         print("  [Stage 2] Running Diffusion Prior...")
         h = run_diffusion_prior(prior_pipe, eeg_embeds[i])
 
-        # Stage 3: Candidate Generation
+        # Stage 3: Generate + compute scores
         print(f"  [Stage 3] Generating {TOP_N} candidates...")
-        candidates = generate_candidates(h, retrieved, generator_sdxl, gen, image_dir)
+        candidates = generate_candidates(
+            h, retrieved, generator_sdxl, gen, image_dir, img_features_norm
+        )
+        all_candidates.append(candidates)
 
-        # Stage 4: Re-Ranking
-        print("  [Stage 4] Re-ranking candidates...")
-        scored, best = rerank_candidates(candidates, img_features_norm)
-        print(f"    Selected: '{best['class']}' "
-              f"(final={best['scores']['final_score']:.4f}, "
-              f"retrieval={best['scores']['score_retrieval']:.4f}, "
-              f"fidelity={best['scores']['score_fidelity']:.4f})")
+    # ------------------------------------------------------------------
+    # PHASE 2: Optimize weights
+    # ------------------------------------------------------------------
+    print(f"\n{'='*60}")
+    print("PHASE 2: Weight Optimization")
+    print(f"{'='*60}")
 
-        gt_class = class_names[i]
+    score_retrieval, score_fidelity, gt_indices = load_all_scores(
+        output_dir, class_names, TOP_N
+    )
+    w_retrieval, w_fidelity, loss_history = optimize_weights(
+        score_retrieval, score_fidelity, gt_indices
+    )
+
+    with open(os.path.join(output_dir, "optimized_weights.json"), "w") as f:
+        json.dump({
+            "w_retrieval":  round(w_retrieval, 6),
+            "w_fidelity":   round(w_fidelity,  6),
+            "loss_history": loss_history,
+        }, f, indent=2)
+
+    # ------------------------------------------------------------------
+    # PHASE 3: Re-rank with optimized weights
+    # ------------------------------------------------------------------
+    print(f"\n{'='*60}")
+    print("PHASE 3: Re-Ranking with Optimized Weights")
+    print(f"{'='*60}")
+
+    for i in range(n):
+        image_dir  = os.path.join(output_dir, f"image_{i:04d}")
+        candidates = all_candidates[i]
+        gt_class   = class_names[i]
+
+        scored, best = rerank_candidates(candidates, w_retrieval, w_fidelity)
+
         with open(os.path.join(image_dir, "rerank_scores.json"), "w") as f:
             json.dump({
                 "gt_class":       gt_class,
                 "selected_class": best["class"],
                 "is_correct":     best["class"] == gt_class,
+                "w_retrieval":    round(w_retrieval, 6),
+                "w_fidelity":     round(w_fidelity,  6),
                 "candidates":     scored,
             }, f, indent=2)
 
         shutil.copy2(best["candidate_path"],
                      os.path.join(image_dir, "selected.png"))
 
+        print(f"  [{i:04d}] selected='{best['class']}'  gt='{gt_class}'  "
+              f"correct={best['class'] == gt_class}  "
+              f"score={best['scores']['final_score']:.4f}")
+
+    # Save full config
+    with open(os.path.join(output_dir, "pipeline_config.json"), "w") as f:
+        json.dump({
+            "top_n":                 TOP_N,
+            "ip_adapter_scale":      IP_ADAPTER_SCALE,
+            "guidance_scale":        GUIDANCE_SCALE,
+            "num_inference_steps":   NUM_INFERENCE_STEPS,
+            "prior_steps":           PRIOR_STEPS,
+            "prior_guidance_scale":  PRIOR_GUIDANCE_SCALE,
+            "negative_prompt":       NEGATIVE_PROMPT,
+            "seed":                  seed,
+            "opt_lr":                OPT_LR,
+            "opt_steps":             OPT_STEPS,
+            "w_retrieval_optimized": round(w_retrieval, 6),
+            "w_fidelity_optimized":  round(w_fidelity,  6),
+        }, f, indent=2)
+
     print(f"\n{'='*60}")
-    print(f"Done. {n} images processed. Output: {output_dir}")
+    print(f"Done. {n} images processed.")
+    print(f"Optimized weights: w_retrieval={w_retrieval:.4f}  "
+          f"w_fidelity={w_fidelity:.4f}")
+    print(f"Output: {output_dir}")
     print(f"{'='*60}")
 
 
@@ -383,13 +525,16 @@ def main():
     global TOP_N, OUTPUT_DIR
 
     parser = argparse.ArgumentParser(
-        description="EEG-to-Image pipeline: retrieve -> prior -> generate -> rerank"
+        description="EEG-to-Image pipeline with gradient descent weight optimization"
     )
-    parser.add_argument("--top_n",  type=int, default=TOP_N)
-    parser.add_argument("--seed",   type=int, default=SEED)
-    parser.add_argument("--output", type=str, default=OUTPUT_DIR)
-    parser.add_argument("--limit",  type=int, default=None,
+    parser.add_argument("--top_n",    type=int, default=TOP_N)
+    parser.add_argument("--seed",     type=int, default=SEED)
+    parser.add_argument("--output",   type=str, default=OUTPUT_DIR)
+    parser.add_argument("--limit",    type=int, default=None,
                         help="Process only the first N images (for debugging)")
+    parser.add_argument("--opt_only", action="store_true",
+                        help="Skip generation — re-run optimization + reranking "
+                             "on an existing output directory")
     args = parser.parse_args()
 
     TOP_N      = args.top_n
@@ -404,6 +549,24 @@ def main():
     if args.limit:
         eeg_embeds = eeg_embeds[:args.limit]
         print(f"  [Debug] Limiting to first {args.limit} images.")
+
+    if args.opt_only:
+        # Re-optimize and re-rank on existing output, no generation needed
+        print("\n[--opt_only] Loading saved scores...")
+        score_retrieval, score_fidelity, gt_indices = load_all_scores(
+            OUTPUT_DIR, class_names, TOP_N
+        )
+        w_retrieval, w_fidelity, loss_history = optimize_weights(
+            score_retrieval, score_fidelity, gt_indices
+        )
+        with open(os.path.join(OUTPUT_DIR, "optimized_weights.json"), "w") as f:
+            json.dump({
+                "w_retrieval":  round(w_retrieval, 6),
+                "w_fidelity":   round(w_fidelity,  6),
+                "loss_history": loss_history,
+            }, f, indent=2)
+        print(f"Weights saved to: {os.path.join(OUTPUT_DIR, 'optimized_weights.json')}")
+        return
 
     prior_pipe     = load_diffusion_prior()
     generator_sdxl = Generator4EmbedsPatched(
