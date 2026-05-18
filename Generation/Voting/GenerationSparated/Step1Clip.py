@@ -169,7 +169,7 @@ def main():
             ]
 
             top1_class = top5[0]["class"]
-            is_correct = top1_class == gt_class
+            is_correct = top1_class == item["class"]
 
             total_candidates         += 1
             total_candidates_correct += int(is_correct)
