@@ -130,14 +130,14 @@ def main():
             # SSIM vs all 200 test images, sorted best first
             scores = sorted(
                 [
-                    {"class": cls, "ssim": round(compute_ssim(candidate_arr, ref), 6)}
+                    {"class": cls, "ssim": round(float(compute_ssim(candidate_arr, ref)), 6)}
                     for cls, ref in zip(class_names, ref_arrays)
                 ],
                 key=lambda x: x["ssim"],
                 reverse=True,
             )
 
-            top_ssim = scores[0]["ssim"]
+            top_ssim = float(scores[0]["ssim"])
 
             # Save full SSIM ranking for this candidate
             with open(os.path.join(image_dir, f"candidate_{rank}_ssim.json"), "w") as f:
