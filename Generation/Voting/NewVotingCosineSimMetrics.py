@@ -220,9 +220,9 @@ def generate_candidates(h, retrieved_classes, generator_sdxl, gen,
         image.save(path)
 
         # Fidelity: cosine_sim(candidate_clip, img_features[class_idx])
-        class_ref    = img_features_norm[class_idx].unsqueeze(0)    # [1, dim]
-        cand_emb     = extract_clip_embedding(image)                # [1, dim]
-        raw_fidelity = (cand_emb @ class_ref.T).item()
+        cand_emb     = extract_clip_embedding(image)                        # [1, dim]
+        sims         = (cand_emb @ img_features_norm.T).squeeze(0)          # [200]
+        raw_fidelity = sims.max().item()
 
         # Save scores to disk for later optimization
         scores_path = os.path.join(image_dir, f"candidate_{rank}_scores.json")
